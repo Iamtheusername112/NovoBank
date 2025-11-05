@@ -237,60 +237,132 @@ export default function SignupPage() {
             security_answer_1: formData.securityAnswer1,
             security_question_2: formData.securityQuestion2,
             security_answer_2: formData.securityAnswer2,
+            pin: formData.pin, // Store PIN in metadata temporarily for later retrieval
           },
         },
       });
 
       if (authError) {
+        console.error('Auth signup error:', authError);
         throw authError;
       }
 
       if (!authData.user) {
+        console.error('No user returned from signup');
         throw new Error('Failed to create user account');
       }
 
+      console.log('User created in auth:', authData.user.id, authData.user.email);
+      console.log('Email confirmed?', authData.user.email_confirmed_at ? 'Yes' : 'No');
+
       // Step 2: Wait for the trigger to create the profile with all data from metadata
       // The trigger function runs as SECURITY DEFINER, so it can insert all data even if user isn't authenticated yet
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Wait a bit longer to ensure trigger completes
+      await new Promise((resolve) => setTimeout(resolve, 3000));
 
-      // Verify the profile was created (optional check)
-      const { data: profileCheck, error: profileCheckError } = await supabase
-        .from('user_profiles')
-        .select('id, email, first_name, last_name')
-        .eq('id', authData.user.id)
-        .single();
+      console.log('Waiting for profile creation...');
 
-      if (profileCheckError && profileCheckError.code !== 'PGRST116') {
-        // PGRST116 is "not found" which is okay if RLS blocks it
-        console.warn('Profile check failed (may be due to RLS):', profileCheckError);
-      } else if (profileCheck) {
-        console.log('Profile created successfully via trigger:', profileCheck);
+      // Step 3: Check if email confirmation is required
+      // If user.email_confirmed_at is null, email confirmation is required
+      const requiresEmailConfirmation = !authData.user.email_confirmed_at;
+
+      if (requiresEmailConfirmation) {
+        // Email confirmation is required - save PIN using a database function that bypasses RLS
+        // We'll create a function to save PIN without authentication
+        if (formData.pin && formData.pin.length === 4) {
+          try {
+            // Use a database function to save PIN (bypasses RLS)
+            const { error: pinError } = await supabase.rpc('save_pin_for_new_user', {
+              p_user_id: authData.user.id,
+              p_pin: formData.pin
+            });
+
+            if (pinError) {
+              console.warn('Failed to save PIN via function:', pinError);
+              // PIN is stored in metadata, so we can retrieve it later
+            } else {
+              console.log('PIN saved successfully via function');
+            }
+          } catch (pinErr) {
+            console.warn('PIN save function error:', pinErr);
+            // Continue anyway - PIN is in metadata
+          }
+        }
+
+        toast({
+          title: 'Account Created Successfully!',
+          description: 'Please check your email to confirm your account, then sign in to continue.',
+          status: 'success',
+          duration: 5000,
+          isClosable: true,
+        });
+        
+        setTimeout(() => {
+          router.push('/');
+        }, 2000);
+        return;
       }
 
-      // Step 3: Try to sign in (will fail if email confirmation is required)
-      // This is just for immediate login - if it fails, user needs to confirm email first
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      // Step 4: Email is already confirmed (or confirmation disabled), try to sign in
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
       });
 
       if (signInError) {
-        console.warn('Auto-login error (may need email confirmation):', signInError);
+        console.warn('Auto-login error:', signInError);
+        
+        // Even if login fails, try to save PIN using function
+        if (formData.pin && formData.pin.length === 4) {
+          try {
+            const { error: pinError } = await supabase.rpc('save_pin_for_new_user', {
+              p_user_id: authData.user.id,
+              p_pin: formData.pin
+            });
+            if (pinError) console.warn('Failed to save PIN:', pinError);
+          } catch (pinErr) {
+            console.warn('PIN save error:', pinErr);
+          }
+        }
+        
         toast({
           title: 'Account Created!',
-          description: signInError.message.includes('email') 
-            ? 'Please check your email to confirm your account.'
-            : 'Please sign in to continue.',
+          description: 'Please sign in to continue.',
           status: 'success',
           duration: 5000,
           isClosable: true,
         });
         setTimeout(() => {
-          router.push('/auth');
+          router.push('/');
         }, 2000);
         return;
       }
 
+      // Step 5: Successfully signed in - save PIN and redirect
+      if (formData.pin && formData.pin.length === 4 && signInData?.user) {
+        const { error: pinError } = await supabase
+          .from('user_settings')
+          .upsert({
+            user_id: signInData.user.id,
+            pin_hash: formData.pin, // In production, use proper hashing!
+          }, {
+            onConflict: 'user_id'
+          });
+
+        if (pinError) {
+          console.error('Failed to save PIN:', pinError);
+          toast({
+            title: 'PIN Not Saved',
+            description: 'Your account was created but PIN could not be saved. Please set it up after logging in.',
+            status: 'warning',
+            duration: 3000,
+          });
+        } else {
+          console.log('PIN saved successfully');
+        }
+      }
+
+      // Step 6: User is now authenticated and PIN is saved, redirect to wallet
       toast({
         title: 'Account Created Successfully!',
         description: 'Welcome to NovaBank! Redirecting to your dashboard...',

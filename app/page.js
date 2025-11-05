@@ -129,7 +129,7 @@ export default function LandingPage() {
               <Button
                 variant="ghost"
                 colorScheme="purple"
-                onClick={() => router.push('/auth')}
+                onClick={() => router.push('/login')}
               >
                 Sign In
               </Button>
@@ -179,9 +179,10 @@ export default function LandingPage() {
                 size="lg"
                 variant="outline"
                 colorScheme="purple"
-                onClick={() => router.push('/wallet')}
+                leftIcon={<Lock size={20} />}
+                onClick={() => router.push('/auth?method=pin')}
               >
-                View Demo
+                Sign in with PIN
               </Button>
             </HStack>
           </VStack>
@@ -321,9 +322,10 @@ export default function LandingPage() {
                 colorScheme="purple"
                 borderColor="purple.600"
                 _hover={{ bg: 'purple.600' }}
-                onClick={() => router.push('/wallet')}
+                leftIcon={<Lock size={20} />}
+                onClick={() => router.push('/auth?method=pin')}
               >
-                Try Demo
+                Sign in with PIN
               </Button>
             </HStack>
           </VStack>
