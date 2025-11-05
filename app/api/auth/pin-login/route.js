@@ -73,12 +73,26 @@ export async function POST(request) {
       );
     }
 
+    // Get the base URL from request headers (works for both local and Vercel)
+    const origin = request.headers.get('origin');
+    const host = request.headers.get('host');
+    const protocol = request.headers.get('x-forwarded-proto') || 
+                     (host?.includes('localhost') ? 'http' : 'https');
+    
+    let baseUrl = origin || 
+      (host ? `${protocol}://${host}` : null) ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+      'http://localhost:3000';
+    
+    baseUrl = baseUrl.replace(/\/$/, ''); // Remove trailing slash
+    
     // Create a magic link using admin API
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
       email: email.toLowerCase(),
       options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/callback?redirect=/wallet`,
+        redirectTo: `${baseUrl}/api/auth/callback?redirect=/wallet`,
       },
     });
 

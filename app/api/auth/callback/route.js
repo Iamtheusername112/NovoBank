@@ -11,9 +11,17 @@ export async function GET(request) {
   const type = searchParams.get('type') || 'magiclink';
   const redirectTo = searchParams.get('redirect') || '/wallet';
 
-  // Get the base URL
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-    (request.headers.get('host') ? `http${request.headers.get('x-forwarded-proto') === 'https' ? 's' : ''}://${request.headers.get('host')}` : 'http://localhost:3000');
+  // Get the base URL from request (works for both local and Vercel)
+  const origin = request.headers.get('origin');
+  const host = request.headers.get('host');
+  const protocol = request.headers.get('x-forwarded-proto') || 
+                   (host?.includes('localhost') ? 'http' : 'https');
+  
+  const baseUrl = origin || 
+    (host ? `${protocol}://${host}` : null) ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    'http://localhost:3000';
 
   if (!tokenHash && !token) {
     return NextResponse.redirect(new URL('/login?error=invalid_token', baseUrl));
