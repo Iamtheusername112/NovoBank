@@ -82,8 +82,10 @@ export default function WalletPage() {
   const [totalBalance, setTotalBalance] = useState(0);
   const [spendingData, setSpendingData] = useState([]);
   const [monthlySpending, setMonthlySpending] = useState(0);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     loadDashboardData();
   }, []);
 
@@ -359,6 +361,11 @@ export default function WalletPage() {
     if (diffDays < 7) return `${diffDays} days ago`;
     return date.toLocaleDateString();
   };
+
+  // Prevent hydration mismatch by not rendering until mounted
+  if (!mounted) {
+    return null;
+  }
 
   if (loading) {
     return (
