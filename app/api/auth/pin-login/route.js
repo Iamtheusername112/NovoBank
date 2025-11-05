@@ -73,30 +73,14 @@ export async function POST(request) {
       );
     }
 
-    // Get the base URL from request headers (works for both local and Vercel)
-    const origin = request.headers.get('origin');
-    const host = request.headers.get('host');
-    const protocol = request.headers.get('x-forwarded-proto') || 
-                     (host?.includes('localhost') ? 'http' : 'https');
-    
-    let baseUrl = origin || 
-      (host ? `${protocol}://${host}` : null) ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
-      'http://localhost:3000';
-    
-    baseUrl = baseUrl.replace(/\/$/, ''); // Remove trailing slash
-    
-    // Create a magic link using admin API
+    // Create a session directly using admin API
+    // Use generateLink to create a recovery link, then extract token and verify it server-side
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
       email: email.toLowerCase(),
-      options: {
-        redirectTo: `${baseUrl}/api/auth/callback?redirect=/wallet`,
-      },
     });
 
-    if (linkError || !linkData || !linkData.properties || !linkData.properties.action_link) {
+    if (linkError || !linkData?.properties?.action_link) {
       console.error('Link generation error:', linkError);
       return NextResponse.json(
         { error: linkError?.message || 'Failed to create authentication link.' },
@@ -105,12 +89,67 @@ export async function POST(request) {
     }
 
     const actionLink = linkData.properties.action_link;
+    
+    // Extract token from the action link
+    // Format: https://[project].supabase.co/auth/v1/verify?token=...&type=magiclink
+    let token = null;
+    try {
+      const url = new URL(actionLink);
+      token = url.searchParams.get('token') || url.searchParams.get('token_hash');
+    } catch (e) {
+      console.error('Failed to parse action link:', e);
+    }
 
-    // Return the action link - the callback route will handle verification automatically
-    // This makes it seamless: user enters PIN -> redirects to link -> callback verifies -> redirects to wallet
+    if (!token) {
+      // If we can't extract token, we need to use the action link directly
+      // But let's try to verify the link's token by making a request to it
+      // Actually, better approach: use the admin API to create a session cookie
+      // For now, fallback to client-side handling
+      return NextResponse.json({
+        success: true,
+        action_link: actionLink,
+        needs_client_verification: true,
+      });
+    }
+
+    // Create a regular Supabase client to verify the token
+    const supabaseClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
+
+    // Verify the token server-side to get a session
+    const { data: otpData, error: otpError } = await supabaseClient.auth.verifyOtp({
+      token_hash: token,
+      type: 'magiclink',
+    });
+
+    if (otpError || !otpData?.session) {
+      console.error('Token verification error:', otpError);
+      // Fallback: return action link for client-side handling
+      return NextResponse.json({
+        success: true,
+        action_link: actionLink,
+        needs_client_verification: true,
+      });
+    }
+
+    // Success! Return the session directly - no redirects needed!
     return NextResponse.json({
       success: true,
-      action_link: actionLink,
+      session: {
+        access_token: otpData.session.access_token,
+        refresh_token: otpData.session.refresh_token,
+        expires_at: otpData.session.expires_at,
+        expires_in: otpData.session.expires_in,
+        token_type: otpData.session.token_type,
+      },
     });
   } catch (error) {
     console.error('PIN login API error:', error);

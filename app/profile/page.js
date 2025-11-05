@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Flex,
@@ -17,6 +17,9 @@ import {
   Tab,
   TabPanel,
   useColorModeValue,
+  Button,
+  useToast,
+  Avatar,
 } from '@chakra-ui/react';
 import {
   Bell,
@@ -26,14 +29,85 @@ import {
   Grid,
   Star,
   CreditCard,
+  LogOut,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 import StatusBar from '@/components/StatusBar';
 import BottomNavigation from '@/components/BottomNavigation';
 
 export default function ProfilePage() {
+  const router = useRouter();
+  const toast = useToast();
   const [darkTheme, setDarkTheme] = useState(false);
   const [personalOffers, setPersonalOffers] = useState(true);
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
   const cardBg = useColorModeValue('white', 'gray.800');
+
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  const loadUserData = async () => {
+    try {
+      setLoading(true);
+      
+      // Get current user
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) {
+        router.push('/login');
+        return;
+      }
+      setUser(currentUser);
+
+      // Get user profile
+      const { data: profileData, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', currentUser.id)
+        .single();
+
+      if (profileError) {
+        console.error('Error loading profile:', profileError);
+      } else {
+        setProfile(profileData);
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: 'Logged out successfully',
+        description: 'You have been logged out of your account',
+        status: 'success',
+        duration: 2000,
+      });
+
+      // Redirect to landing page
+      router.push('/');
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast({
+        title: 'Logout failed',
+        description: error.message || 'An error occurred while logging out',
+        status: 'error',
+        duration: 3000,
+      });
+    }
+  };
 
   return (
     <Box minH="100vh" bg="gray.50" pb="80px">
@@ -41,25 +115,33 @@ export default function ProfilePage() {
       <Box px={4} py={4}>
         <HStack justify="space-between" align="center" mb={6}>
           <HStack spacing={3}>
-            <Box
-              w="50px"
-              h="50px"
-              borderRadius="full"
-              bg="blue.200"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-            >
-              <Text fontSize="lg" fontWeight="bold" color="white">
-                J
-              </Text>
-            </Box>
+            {profile?.profile_image_url ? (
+              <Avatar
+                size="md"
+                src={profile.profile_image_url}
+                name={`${profile?.first_name || ''} ${profile?.last_name || ''}`}
+              />
+            ) : (
+              <Box
+                w="50px"
+                h="50px"
+                borderRadius="full"
+                bgGradient="linear(to-br, purple.500, pink.500)"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <Text fontSize="lg" fontWeight="bold" color="white">
+                  {profile?.first_name?.[0] || profile?.email?.[0] || 'U'}{' '}
+                </Text>
+              </Box>
+            )}
             <VStack align="flex-start" spacing={0}>
               <Text fontSize="xs" color="gray.500">
                 Welcome back,
               </Text>
               <Text fontSize="lg" fontWeight="bold" color="brand.600">
-                John
+                {profile?.first_name || profile?.email || 'User'}
               </Text>
             </VStack>
           </HStack>
@@ -149,6 +231,26 @@ export default function ProfilePage() {
                       );
                     })}
                   </VStack>
+                </Box>
+
+                <Box>
+                  <Text fontSize="sm" fontWeight="semibold" color="gray.600" mb={3}>
+                    Account
+                  </Text>
+                  <Card bg={cardBg} borderRadius="md">
+                    <CardBody>
+                      <Button
+                        leftIcon={<LogOut size={20} />}
+                        colorScheme="red"
+                        variant="outline"
+                        w="full"
+                        onClick={handleLogout}
+                        isLoading={loading}
+                      >
+                        Log Out
+                      </Button>
+                    </CardBody>
+                  </Card>
                 </Box>
 
                 <Box>

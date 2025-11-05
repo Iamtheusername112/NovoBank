@@ -91,12 +91,22 @@ export default function WalletPage() {
     try {
       setLoading(true);
       
-      // Get current user
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) {
-        router.push('/auth');
+      // Get current user - check session first, then user
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        router.push('/login');
         return;
       }
+
+      // Get user with the session
+      const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !currentUser) {
+        router.push('/login');
+        return;
+      }
+      
       setUser(currentUser);
 
       // Load profile

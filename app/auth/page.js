@@ -50,29 +50,36 @@ export default function AuthPage() {
 
   const checkAuthStatus = async () => {
     try {
-      // Check if user is already authenticated
-      const { data: { user }, error } = await supabase.auth.getUser();
+      // Check session first
+      const { data: { session } } = await supabase.auth.getSession();
       
-      if (user) {
-        // User is authenticated, check if PIN is set
-        const { data: settings } = await supabase
-          .from('user_settings')
-          .select('pin_hash')
-          .eq('user_id', user.id)
-          .single();
+      if (session) {
+        const { data: { user }, error } = await supabase.auth.getUser();
         
-        if (!settings?.pin_hash) {
-          // No PIN set yet, redirect to wallet (first time setup)
-          router.push('/wallet');
+        if (user) {
+          // User is authenticated, check if PIN is set
+          const { data: settings } = await supabase
+            .from('user_settings')
+            .select('pin_hash')
+            .eq('user_id', user.id)
+            .single();
+          
+          if (!settings?.pin_hash) {
+            // No PIN set yet, redirect to wallet (first time setup)
+            router.push('/wallet');
+            return;
+          }
+          // User has PIN set, they can enter it here
+          setCheckingAuth(false);
           return;
         }
-      } else {
-        // User not authenticated, show email input for PIN login
-        setShowEmailInput(true);
       }
+      
+      // User not authenticated, show email input for PIN login
+      setShowEmailInput(true);
+      setCheckingAuth(false);
     } catch (error) {
       console.error('Auth check error:', error);
-    } finally {
       setCheckingAuth(false);
     }
   };
@@ -314,7 +321,7 @@ export default function AuthPage() {
             throw new Error(data.error || 'Failed to authenticate');
           }
 
-          // If API route returns a session, set it
+          // If API route returns a session, set it directly
           if (data.session && data.session.access_token) {
             // Set the session in Supabase client
             const { error: sessionError } = await supabase.auth.setSession({
@@ -333,12 +340,36 @@ export default function AuthPage() {
               duration: 2000,
             });
 
-            setTimeout(() => {
-              router.push('/wallet');
-            }, 500);
+            // Redirect to wallet immediately
+            router.push('/wallet');
           } else if (data.action_link) {
-            // If we got an action link, redirect to it (will auto-complete auth)
-            window.location.href = data.action_link;
+            // Fallback: if we still get action_link, handle it but log a warning
+            console.warn('Received action_link instead of session - using fallback');
+            // Parse token from action link and verify client-side
+            const url = new URL(data.action_link);
+            const token = url.searchParams.get('token') || url.searchParams.get('token_hash');
+            
+            if (token) {
+              // Verify the token client-side
+              const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+                token_hash: token,
+                type: 'magiclink',
+              });
+
+              if (!verifyError && verifyData.session) {
+                toast({
+                  title: 'Login Successful',
+                  description: 'Welcome back!',
+                  status: 'success',
+                  duration: 2000,
+                });
+                router.push('/wallet');
+              } else {
+                throw new Error('Failed to verify token');
+              }
+            } else {
+              throw new Error('No token found in action link');
+            }
           } else {
             throw new Error(data.error || 'No session returned');
           }

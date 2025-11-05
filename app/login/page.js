@@ -140,13 +140,13 @@ export default function LoginPage() {
 
         toast({
           title: 'Login Successful',
-          description: 'Redirecting to PIN entry...',
+          description: 'Welcome back!',
           status: 'success',
           duration: 2000,
         });
         
         setTimeout(() => {
-          router.push('/auth');
+          router.push('/wallet');
         }, 500);
       }
     } catch (error) {
@@ -201,8 +201,40 @@ export default function LoginPage() {
         return;
       }
 
-      // Verify PIN (in production, compare hashed values)
-      if (settings.pin_hash !== pin) {
+      // Verify PIN using database function (same as /auth page)
+      const { data: verifyData, error: verifyError } = await supabase
+        .rpc('verify_pin_for_login', {
+          email_input: email.trim().toLowerCase(),
+          pin_input: pin
+        });
+
+      if (verifyError) {
+        console.error('PIN verification error:', verifyError);
+        toast({
+          title: 'Error',
+          description: 'Failed to verify PIN. Please try again.',
+          status: 'error',
+          duration: 3000,
+        });
+        setLoading(false);
+        return;
+      }
+
+      if (!verifyData || verifyData.length === 0 || !verifyData[0]) {
+        toast({
+          title: 'Account Not Found',
+          description: 'No account found with this email',
+          status: 'error',
+          duration: 3000,
+        });
+        setLoading(false);
+        return;
+      }
+
+      const verificationResult = verifyData[0];
+
+      // Check if PIN is set and correct
+      if (!verificationResult.pin_set) {
         toast({
           title: 'Invalid PIN',
           description: 'The PIN you entered is incorrect',
@@ -214,48 +246,90 @@ export default function LoginPage() {
         return;
       }
 
-      // PIN is correct! Now we need to authenticate with Supabase
-      // Use magic link to authenticate the user automatically
+      // PIN is correct! Now authenticate with Supabase via API route
       toast({
         title: 'PIN Verified',
-        description: 'Sending magic link to your email...',
+        description: 'Authenticating...',
         status: 'info',
-        duration: 3000,
+        duration: 2000,
       });
 
-      // Send magic link for passwordless authentication
-      const { error: magicLinkError } = await supabase.auth.signInWithOtp({
-        email: email.trim().toLowerCase(),
-        options: {
-          shouldCreateUser: false, // Don't create user if they don't exist
-          emailRedirectTo: `${window.location.origin}/auth?pin_verified=true`,
-        },
-      });
-
-      if (magicLinkError) {
-        // If magic link fails, fall back to password requirement
-        toast({
-          title: 'PIN Verified',
-          description: 'Please enter your password to complete login',
-          status: 'info',
-          duration: 4000,
+      // Call API route to create session token using Admin API
+      try {
+        const response = await fetch('/api/auth/pin-login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: email.trim().toLowerCase(),
+            pin: pin,
+          }),
         });
-        
-        // Switch to password mode and pre-fill email
-        setLoginMethod('password');
-        setLoading(false);
-        return;
-      }
 
-      // Magic link sent successfully
-      toast({
-        title: 'Check Your Email',
-        description: 'We sent you a magic link. Click it to complete login with PIN.',
-        status: 'success',
-        duration: 5000,
-      });
-      
-      setLoading(false);
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || 'Failed to authenticate');
+          }
+
+          // If API route returns a session, set it directly
+          if (data.session && data.session.access_token) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: data.session.access_token,
+              refresh_token: data.session.refresh_token,
+            });
+
+            if (sessionError) {
+              throw sessionError;
+            }
+
+            toast({
+              title: 'Login Successful',
+              description: 'Welcome back!',
+              status: 'success',
+              duration: 2000,
+            });
+
+            router.push('/wallet');
+          } else if (data.action_link) {
+            // Fallback: if we get action_link, verify token client-side
+            const url = new URL(data.action_link);
+            const token = url.searchParams.get('token') || url.searchParams.get('token_hash');
+            
+            if (token) {
+              const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+                token_hash: token,
+                type: 'magiclink',
+              });
+
+              if (!verifyError && verifyData.session) {
+                toast({
+                  title: 'Login Successful',
+                  description: 'Welcome back!',
+                  status: 'success',
+                  duration: 2000,
+                });
+                router.push('/wallet');
+              } else {
+                throw new Error('Failed to verify token');
+              }
+            } else {
+              throw new Error('No token found in action link');
+            }
+          } else {
+            throw new Error(data.error || 'No session returned');
+          }
+      } catch (apiError) {
+        console.error('API authentication error:', apiError);
+        toast({
+          title: 'Login Failed',
+          description: apiError.message || 'Failed to authenticate. Please try again.',
+          status: 'error',
+          duration: 3000,
+        });
+        setLoading(false);
+      }
     } catch (error) {
       console.error('PIN login error:', error);
       toast({
@@ -297,66 +371,141 @@ export default function LoginPage() {
               Sign In
             </Text>
             <Text fontSize="sm" color="gray.600" textAlign="center">
-              Enter your email and password to continue
+              Choose your login method
             </Text>
           </VStack>
 
-          <Box as="form" w="full" onSubmit={handleSubmit}>
-            <VStack spacing={4}>
-              <FormControl isInvalid={errors.email}>
-                <FormLabel>Email</FormLabel>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    if (errors.email) setErrors({ ...errors, email: '' });
-                  }}
-                  placeholder="your.email@example.com"
-                  size="lg"
-                  borderRadius="lg"
-                />
-                <FormErrorMessage>{errors.email}</FormErrorMessage>
-              </FormControl>
+          <Tabs 
+            index={loginMethod === 'password' ? 0 : 1} 
+            onChange={(index) => setLoginMethod(index === 0 ? 'password' : 'pin')}
+            colorScheme="purple"
+            w="full"
+          >
+            <TabList w="full">
+              <Tab flex={1}>Password</Tab>
+              <Tab flex={1}>PIN</Tab>
+            </TabList>
+            <TabPanels>
+              <TabPanel px={0}>
+                <Box as="form" w="full" onSubmit={handleSubmit}>
+                  <VStack spacing={4}>
+                    <FormControl isInvalid={errors.email}>
+                      <FormLabel>Email</FormLabel>
+                      <Input
+                        type="email"
+                        value={email}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          if (errors.email) setErrors({ ...errors, email: '' });
+                        }}
+                        placeholder="your.email@example.com"
+                        size="lg"
+                        borderRadius="lg"
+                      />
+                      <FormErrorMessage>{errors.email}</FormErrorMessage>
+                    </FormControl>
 
-              <FormControl isInvalid={errors.password}>
-                <FormLabel>Password</FormLabel>
-                <HStack spacing={2}>
-                  <Input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      if (errors.password) setErrors({ ...errors, password: '' });
-                    }}
-                    placeholder="Enter your password"
-                    size="lg"
-                    borderRadius="lg"
-                    flex={1}
-                  />
-                  <Button
-                    variant="ghost"
-                    onClick={() => setShowPassword(!showPassword)}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                  </Button>
-                </HStack>
-                <FormErrorMessage>{errors.password}</FormErrorMessage>
-              </FormControl>
+                    <FormControl isInvalid={errors.password}>
+                      <FormLabel>Password</FormLabel>
+                      <HStack spacing={2}>
+                        <Input
+                          type={showPassword ? 'text' : 'password'}
+                          value={password}
+                          onChange={(e) => {
+                            setPassword(e.target.value);
+                            if (errors.password) setErrors({ ...errors, password: '' });
+                          }}
+                          placeholder="Enter your password"
+                          size="lg"
+                          borderRadius="lg"
+                          flex={1}
+                        />
+                        <Button
+                          variant="ghost"
+                          onClick={() => setShowPassword(!showPassword)}
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                        </Button>
+                      </HStack>
+                      <FormErrorMessage>{errors.password}</FormErrorMessage>
+                    </FormControl>
 
-              <Button
-                type="submit"
-                w="full"
-                bg="purple.600"
-                color="white"
-                _hover={{ bg: 'purple.700' }}
-                size="lg"
-                isLoading={loading}
-                loadingText="Signing in..."
-              >
-                Sign In
-              </Button>
+                    <Button
+                      type="submit"
+                      w="full"
+                      bg="purple.600"
+                      color="white"
+                      _hover={{ bg: 'purple.700' }}
+                      size="lg"
+                      isLoading={loading && loginMethod === 'password'}
+                      loadingText="Signing in..."
+                    >
+                      Sign In
+                    </Button>
+                  </VStack>
+                </Box>
+              </TabPanel>
+              
+              <TabPanel px={0}>
+                <Box as="form" w="full" onSubmit={handleSubmit}>
+                  <VStack spacing={4}>
+                    <FormControl isInvalid={errors.email}>
+                      <FormLabel>Email</FormLabel>
+                      <Input
+                        type="email"
+                        value={email}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          if (errors.email) setErrors({ ...errors, email: '' });
+                        }}
+                        placeholder="your.email@example.com"
+                        size="lg"
+                        borderRadius="lg"
+                      />
+                      <FormErrorMessage>{errors.email}</FormErrorMessage>
+                    </FormControl>
+
+                    <FormControl isInvalid={errors.pin}>
+                      <FormLabel>PIN</FormLabel>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={pin}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '').slice(0, 4);
+                          setPin(value);
+                          if (errors.pin) setErrors({ ...errors, pin: '' });
+                        }}
+                        placeholder="Enter 4-digit PIN"
+                        size="lg"
+                        borderRadius="lg"
+                        textAlign="center"
+                        letterSpacing="4px"
+                        fontSize="xl"
+                        fontWeight="bold"
+                      />
+                      <FormErrorMessage>{errors.pin}</FormErrorMessage>
+                    </FormControl>
+
+                    <Button
+                      type="submit"
+                      w="full"
+                      bg="purple.600"
+                      color="white"
+                      _hover={{ bg: 'purple.700' }}
+                      size="lg"
+                      isLoading={loading && loginMethod === 'pin'}
+                      loadingText="Signing in..."
+                    >
+                      Sign In with PIN
+                    </Button>
+                  </VStack>
+                </Box>
+              </TabPanel>
+            </TabPanels>
+          </Tabs>
 
           <VStack spacing={2} mt={4}>
             <Text fontSize="sm" color="gray.600" textAlign="center">

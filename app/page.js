@@ -26,6 +26,8 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+import { useToast } from '@chakra-ui/react';
 
 const features = [
   {
@@ -77,6 +79,7 @@ const benefits = [
 
 export default function LandingPage() {
   const router = useRouter();
+  const toast = useToast();
   const [mounted, setMounted] = useState(false);
   const bgGradient = useColorModeValue(
     'linear(to-br, purple.50, pink.50, blue.50)',
@@ -85,11 +88,99 @@ export default function LandingPage() {
   const cardBg = useColorModeValue('white', 'gray.800');
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    // Handle Supabase authentication callback with hash parameters FIRST (before mounting)
+    const handleAuthCallback = async () => {
+      // Check for hash parameters (access_token, etc.)
+      if (window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const error = hashParams.get('error');
+        const errorDescription = hashParams.get('error_description');
 
+        if (error) {
+          // Handle error
+          console.error('Auth error:', error, errorDescription);
+          // Clean up URL immediately
+          window.history.replaceState({}, document.title, window.location.pathname);
+          toast({
+            title: 'Authentication Error',
+            description: errorDescription || error,
+            status: 'error',
+            duration: 5000,
+          });
+          return;
+        }
+
+        if (accessToken && refreshToken) {
+          try {
+            console.log('Processing auth callback with tokens...');
+            
+            // Set the session with the tokens from hash
+            const { data, error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+
+            if (sessionError) {
+              console.error('Session error:', sessionError);
+              throw sessionError;
+            }
+
+            if (data.session) {
+              // Verify session is actually set by checking user
+              const { data: { user }, error: userError } = await supabase.auth.getUser();
+              
+              if (userError || !user) {
+                console.error('User verification error:', userError);
+                throw new Error('Failed to verify session');
+              }
+
+              console.log('Session set successfully, redirecting to wallet...');
+
+              // Clean up URL by removing hash immediately
+              window.history.replaceState({}, document.title, window.location.pathname);
+              
+              // Show success message
+              toast({
+                title: 'Login Successful',
+                description: 'Welcome back!',
+                status: 'success',
+                duration: 2000,
+              });
+              
+              // Redirect immediately using window.location for reliability
+              window.location.href = '/wallet';
+              return; // Exit early, don't render landing page
+            }
+          } catch (error) {
+            console.error('Session setting error:', error);
+            // Clean up URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+            toast({
+              title: 'Authentication Failed',
+              description: error.message || 'Failed to complete authentication',
+              status: 'error',
+              duration: 5000,
+            });
+          }
+        }
+      }
+      
+      // Only set mounted if no auth callback was processed
+      setMounted(true);
+    };
+
+    handleAuthCallback();
+  }, [router, toast]);
+
+  // Show loading state while processing auth callback
   if (!mounted) {
-    return null;
+    return (
+      <Box minH="100vh" bg={bgGradient} display="flex" alignItems="center" justifyContent="center">
+        <Text>Processing authentication...</Text>
+      </Box>
+    );
   }
 
   return (
