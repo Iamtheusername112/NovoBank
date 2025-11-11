@@ -97,6 +97,8 @@ function SendMoneyContent() {
     accountNumber: '',
     nickname: '',
   });
+  const [notifications, setNotifications] = useState([]);
+  const [alerts, setAlerts] = useState([]);
   
   const steps = [
     {
@@ -312,8 +314,28 @@ function SendMoneyContent() {
         setRecipient({ id: null, name: '', account: '', bank: '' });
         setIsAddingRecipient(true);
       }
+
+      const { data: notificationsData } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setNotifications(notificationsData || []);
+
+      const { data: alertsData } = await supabase
+        .from('alerts')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setAlerts(alertsData || []);
     } catch (error) {
       console.error('Error loading data:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load send money data.',
+        status: 'error',
+        duration: 3000,
+      });
     }
   };
 
@@ -1006,6 +1028,8 @@ function SendMoneyContent() {
     });
     return `${baseUrl}?${params.toString()}`;
   };
+
+  const unreadCount = notifications.length + alerts.length;
 
   if (!mounted) {
     return null;

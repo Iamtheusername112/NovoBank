@@ -25,6 +25,12 @@ import {
   useDisclosure,
   Progress,
   Input,
+  useBreakpointValue,
+  Grid,
+  SimpleGrid,
+  Stack,
+  Divider,
+  Heading,
 } from '@chakra-ui/react';
 import {
   Lock,
@@ -353,6 +359,15 @@ function WalletPage() {
     return date.toLocaleDateString();
   };
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Morning';
+    if (hour < 18) return 'Afternoon';
+    return 'Evening';
+  };
+
+  const isDesktop = useBreakpointValue({ base: false, lg: true });
+
   // Prevent hydration mismatch by not rendering until mounted
   if (!mounted) {
     return null;
@@ -369,10 +384,10 @@ function WalletPage() {
   const primaryCard = cards.find(c => !c.is_frozen) || cards[0];
   const unreadCount = notifications.length + alerts.length;
 
-  return (
+  const mobileLayout = (
     <Box minH="100vh" bg={bgColor} pb="80px">
       <StatusBar />
-      
+
       {/* Header */}
       <Box px={4} py={4} bg={cardBg} borderBottom="1px" borderColor="gray.200">
         <Flex justify="space-between" align="center">
@@ -438,15 +453,15 @@ function WalletPage() {
               <Text fontSize="4xl" fontWeight="bold" color="gray.800">
                 {formatCurrency(totalBalance)}
               </Text>
-              
+
               {accounts.length > 0 && (
                 <VStack align="stretch" spacing={2}>
                   {accounts.slice(0, 3).map((account) => (
-                    <HStack 
-                      key={account.id} 
-                      justify="space-between" 
-                      p={2} 
-                      bg="gray.50" 
+                    <HStack
+                      key={account.id}
+                      justify="space-between"
+                      p={2}
+                      bg="gray.50"
                       borderRadius="md"
                       cursor="pointer"
                       onClick={() => router.push('/accounts')}
@@ -521,29 +536,29 @@ function WalletPage() {
           </Card>
         )}
 
-            {/* Quick Actions */}
-            <Card bg={cardBg} borderRadius="xl" mb={4} boxShadow="md">
-              <CardBody>
-                <HStack justify="space-between" mb={4}>
-                  <Text fontSize="lg" fontWeight="semibold" color="gray.800">
-                    Quick Actions
-                  </Text>
-                  <Button
-                    size="xs"
-                    variant="ghost"
-                    colorScheme="purple"
-                    onClick={() => router.push('/scheduled-payments')}
-                  >
-                    View Scheduled
-                  </Button>
-                </HStack>
-                <HStack spacing={3} justify="space-around">
-                  {[
-                    { icon: Send, label: 'Transfer', action: 'transfer', color: 'purple' },
-                    { icon: Receipt, label: 'Pay Bills', action: 'bills', color: 'blue' },
-                    { icon: Upload, label: 'Deposit', action: 'deposit', color: 'green' },
-                    { icon: Shield, label: primaryCard?.is_frozen ? 'Unfreeze' : 'Freeze', action: 'freeze', color: 'orange' },
-                  ].map(({ icon: Icon, label, action, color }) => (
+        {/* Quick Actions */}
+        <Card bg={cardBg} borderRadius="xl" mb={4} boxShadow="md">
+          <CardBody>
+            <HStack justify="space-between" mb={4}>
+              <Text fontSize="lg" fontWeight="semibold" color="gray.800">
+                Quick Actions
+              </Text>
+              <Button
+                size="xs"
+                variant="ghost"
+                colorScheme="purple"
+                onClick={() => router.push('/scheduled-payments')}
+              >
+                View Scheduled
+              </Button>
+            </HStack>
+            <HStack spacing={3} justify="space-around">
+              {[
+                { icon: Send, label: 'Transfer', action: 'transfer', color: 'purple' },
+                { icon: Receipt, label: 'Pay Bills', action: 'bills', color: 'blue' },
+                { icon: Upload, label: 'Deposit', action: 'deposit', color: 'green' },
+                { icon: Shield, label: primaryCard?.is_frozen ? 'Unfreeze' : 'Freeze', action: 'freeze', color: 'orange' },
+              ].map(({ icon: Icon, label, action, color }) => (
                 <VStack
                   key={action}
                   spacing={2}
@@ -587,7 +602,7 @@ function WalletPage() {
                   View All
                 </Button>
               </Flex>
-              
+
               <Box w="full" h="200px" mb={4}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -607,7 +622,7 @@ function WalletPage() {
                   </PieChart>
                 </ResponsiveContainer>
               </Box>
-              
+
               <VStack spacing={2} align="flex-start">
                 {spendingData.slice(0, 4).map((item, index) => (
                   <HStack key={index} spacing={2} w="full" justify="space-between">
@@ -623,7 +638,7 @@ function WalletPage() {
                   </HStack>
                 ))}
               </VStack>
-              
+
               <Box mt={4} p={3} bg="purple.50" borderRadius="md">
                 <Text fontSize="sm" color="gray.700">
                   Total: <Text as="span" fontWeight="bold">{formatCurrency(monthlySpending)}</Text>
@@ -633,7 +648,7 @@ function WalletPage() {
           </Card>
         )}
 
-        {/* Budgets Progress */}
+        {/* Budget Progress */}
         {budgets.length > 0 && (
           <Card bg={cardBg} borderRadius="xl" mb={4} boxShadow="md">
             <CardBody>
@@ -863,9 +878,397 @@ function WalletPage() {
         </Card>
       </Box>
 
-      <BottomNavigation />
+      <BottomNavigation unreadCount={unreadCount} />
+    </Box>
+  );
 
-      {/* Profile Image Upload Modal */}
+  const desktopLayout = (
+    <Box minH="100vh" bg="gray.50" pb={10}>
+      <Flex
+        px={12}
+        py={6}
+        bg="white"
+        borderBottom="1px solid"
+        borderColor="gray.200"
+        justify="space-between"
+        align="center"
+        boxShadow="sm"
+      >
+        <VStack align="flex-start" spacing={1}>
+          <Text fontSize="sm" color="gray.500">Dashboard</Text>
+          <Heading size="lg" color="gray.800">
+            Good {getGreeting()}, {profile?.first_name || 'User'}
+          </Heading>
+        </VStack>
+        <HStack spacing={4}>
+          <Button
+            leftIcon={<ArrowUpRight size={18} />}
+            colorScheme="purple"
+            variant="solid"
+            onClick={() => router.push('/send-money')}
+          >
+            New Transfer
+          </Button>
+          <Box position="relative">
+            <IconButton
+              icon={<Bell size={22} />}
+              aria-label="Notifications"
+              variant="ghost"
+              onClick={() => router.push('/notifications')}
+            />
+            {unreadCount > 0 && (
+              <Badge
+                colorScheme="red"
+                borderRadius="full"
+                position="absolute"
+                top="-2px"
+                right="-2px"
+                p="0"
+                minW="10px"
+                h="10px"
+              />
+            )}
+          </Box>
+          <Avatar
+            size="sm"
+            src={profile?.profile_image_url}
+            name={`${profile?.first_name || ''} ${profile?.last_name || ''}`}
+            cursor="pointer"
+            onClick={onProfileOpen}
+          />
+        </HStack>
+      </Flex>
+
+      <Grid templateColumns="320px minmax(0, 1fr) 360px" gap={6} px={12} py={8} alignItems="start">
+        <VStack spacing={6} align="stretch">
+          <Card bg="white" borderRadius="xl" boxShadow="md">
+            <CardBody>
+              <VStack spacing={3} align="stretch">
+                <HStack spacing={3}>
+                  <Avatar
+                    size="lg"
+                    src={profile?.profile_image_url}
+                    name={`${profile?.first_name || ''} ${profile?.last_name || ''}`}
+                  />
+                  <Box>
+                    <Text fontSize="lg" fontWeight="semibold" color="gray.800">
+                      {profile?.first_name || 'User'} {profile?.last_name || ''}
+                    </Text>
+                    <Text fontSize="sm" color="gray.500">{user?.email}</Text>
+                  </Box>
+                </HStack>
+                <Divider />
+                <VStack align="flex-start" spacing={2}>
+                  <Text fontSize="sm" color="gray.500">Primary Account</Text>
+                  {accounts.length > 0 ? (
+                    <Box>
+                      <Text fontSize="md" fontWeight="semibold" color="gray.800">
+                        {accounts[0].account_name}
+                      </Text>
+                      <Text fontSize="sm" color="gray.500">
+                        {accounts[0].account_type.toUpperCase()} ••••{accounts[0].account_number.slice(-4)}
+                      </Text>
+                      <Text fontSize="xl" fontWeight="bold" color="gray.800" mt={2}>
+                        {formatCurrency(accounts[0].balance)}
+                      </Text>
+                    </Box>
+                  ) : (
+                    <Text fontSize="sm" color="gray.500">No accounts linked yet.</Text>
+                  )}
+                </VStack>
+                <Button variant="outline" leftIcon={<Settings size={16} />} onClick={() => router.push('/profile')}>
+                  Manage Profile
+                </Button>
+              </VStack>
+            </CardBody>
+          </Card>
+
+          <Card bg="white" borderRadius="xl" boxShadow="md">
+            <CardBody>
+              <HStack justify="space-between" mb={4}>
+                <Heading size="sm">Notifications</Heading>
+                <Button variant="ghost" size="xs" onClick={() => router.push('/notifications')}>
+                  View all
+                </Button>
+              </HStack>
+              <VStack spacing={3} align="stretch">
+                {notifications.length > 0 ? (
+                  notifications.map((item) => (
+                    <Box key={item.id} p={3} bg="gray.50" borderRadius="md">
+                      <Text fontSize="sm" fontWeight="semibold" color="gray.800">{item.title || 'Notification'}</Text>
+                      <Text fontSize="xs" color="gray.600">{item.message}</Text>
+                    </Box>
+                  ))
+                ) : (
+                  <Text fontSize="sm" color="gray.500">You're all caught up!</Text>
+                )}
+              </VStack>
+            </CardBody>
+          </Card>
+
+          {alerts.length > 0 && (
+            <Card bg="white" borderRadius="xl" boxShadow="md">
+              <CardBody>
+                <HStack spacing={2} mb={4}>
+                  <AlertCircle size={20} color="var(--chakra-colors-red-500)" />
+                  <Heading size="sm">Alerts</Heading>
+                </HStack>
+                <VStack spacing={3} align="stretch">
+                  {alerts.map((alert) => (
+                    <Box key={alert.id} p={3} bg={alert.severity === 'critical' ? 'red.50' : 'orange.50'} borderRadius="md">
+                      <Text fontSize="sm" fontWeight="semibold" color="gray.800">{alert.title}</Text>
+                      <Text fontSize="xs" color="gray.600">{alert.message}</Text>
+                    </Box>
+                  ))}
+                </VStack>
+              </CardBody>
+            </Card>
+          )}
+        </VStack>
+
+        <VStack spacing={6} align="stretch">
+          <Card bgGradient="linear(to-r, purple.500, pink.500)" color="white" borderRadius="xl" boxShadow="lg">
+            <CardBody>
+              <Flex justify="space-between" align="start">
+                <VStack align="flex-start" spacing={2}>
+                  <Text fontSize="sm" opacity={0.9}>Total Balance</Text>
+                  <Heading size="lg">{formatCurrency(totalBalance)}</Heading>
+                  <Text fontSize="xs" opacity={0.8}>
+                    Across {accounts.length} accounts
+                  </Text>
+                </VStack>
+                <VStack spacing={3} align="flex-end">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    colorScheme="whiteAlpha"
+                    leftIcon={<Upload size={16} />}
+                    onClick={() => handleQuickAction('deposit')}
+                  >
+                    Deposit funds
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    colorScheme="whiteAlpha"
+                    leftIcon={<Send size={16} />}
+                    onClick={() => handleQuickAction('transfer')}
+                  >
+                    Quick transfer
+                  </Button>
+                </VStack>
+              </Flex>
+            </CardBody>
+          </Card>
+
+          {accounts.length > 0 && (
+            <Card bg="white" borderRadius="xl" boxShadow="md">
+              <CardBody>
+                <HStack justify="space-between" mb={4}>
+                  <Heading size="sm">Accounts</Heading>
+                  <Button variant="ghost" size="xs" onClick={() => router.push('/accounts')}>
+                    Manage
+                  </Button>
+                </HStack>
+                <SimpleGrid columns={2} spacing={4}>
+                  {accounts.slice(0, 4).map((account) => (
+                    <Box key={account.id} p={4} bg="gray.50" borderRadius="lg">
+                      <HStack justify="space-between" mb={2}>
+                        <Text fontSize="sm" fontWeight="semibold" color="gray.700">
+                          {account.account_name}
+                        </Text>
+                        {account.is_primary && (
+                          <Badge colorScheme="purple" fontSize="xs">Primary</Badge>
+                        )}
+                      </HStack>
+                      <Text fontSize="xs" color="gray.500">
+                        {account.account_type.toUpperCase()} ••••{account.account_number.slice(-4)}
+                      </Text>
+                      <Text fontSize="lg" fontWeight="bold" color="gray.800" mt={2}>
+                        {formatCurrency(account.balance)}
+                      </Text>
+                    </Box>
+                  ))}
+                </SimpleGrid>
+                {accounts.length > 4 && (
+                  <Button variant="ghost" size="sm" mt={3} onClick={() => router.push('/accounts')}>
+                    View all ({accounts.length})
+                  </Button>
+                )}
+              </CardBody>
+            </Card>
+          )}
+
+          {primaryCard && (
+            <Card bg="white" borderRadius="xl" boxShadow="md">
+              <CardBody>
+                <Heading size="sm" mb={4}>Primary Card</Heading>
+                <Box
+                  borderRadius="xl"
+                  bgGradient="linear(to-r, gray.800, purple.600)"
+                  color="white"
+                  p={6}
+                  minH="200px"
+                >
+                  <Flex justify="space-between">
+                    <CreditCard size={28} />
+                    <Wifi size={24} />
+                  </Flex>
+                  <VStack align="flex-start" spacing={2} mt={8}>
+                    <Text fontSize="sm" opacity={0.8}>Available balance</Text>
+                    <Heading size="md">{formatCurrency(primaryCard.balance)}</Heading>
+                    <Text fontSize="sm">{primaryCard.card_holder_name} •••• {primaryCard.card_number.slice(-4)}</Text>
+                    <Text fontSize="xs" opacity={0.7}>Expires {primaryCard.expiry_date}</Text>
+                  </VStack>
+                </Box>
+              </CardBody>
+            </Card>
+          )}
+
+          {spendingData.length > 0 && (
+            <Card bg="white" borderRadius="xl" boxShadow="md">
+              <CardBody>
+                <Flex justify="space-between" align="center" mb={4}>
+                  <Heading size="sm">Monthly Spend</Heading>
+                  <Button variant="ghost" size="xs" onClick={() => router.push('/statistics')}>
+                    View details
+                  </Button>
+                </Flex>
+                <Box w="full" h="240px">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={spendingData} cx="50%" cy="50%" innerRadius={70} outerRadius={95} dataKey="value">
+                        {spendingData.map((entry, index) => (
+                          <Cell key={`desktop-cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => formatCurrency(value)} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Box>
+                <Stack mt={4} spacing={3}>
+                  {spendingData.map((item, index) => (
+                    <HStack key={index} justify="space-between">
+                      <HStack>
+                        <Box w="10px" h="10px" borderRadius="full" bg={item.color} />
+                        <Text fontSize="sm" color="gray.600">{item.name}</Text>
+                      </HStack>
+                      <Text fontSize="sm" fontWeight="semibold" color="gray.800">{formatCurrency(item.value)}</Text>
+                    </HStack>
+                  ))}
+                </Stack>
+              </CardBody>
+            </Card>
+          )}
+        </VStack>
+
+        <VStack spacing={6} align="stretch">
+          <Card bg="white" borderRadius="xl" boxShadow="md">
+            <CardBody>
+              <HStack justify="space-between" mb={4}>
+                <Heading size="sm">Recent Transactions</Heading>
+                <Button variant="ghost" size="xs" onClick={() => router.push('/statistics')}>
+                  View history
+                </Button>
+              </HStack>
+              <VStack spacing={3} align="stretch">
+                {transactions.length > 0 ? (
+                  transactions.slice(0, 8).map((transaction) => (
+                    <HStack key={transaction.id} justify="space-between" p={3} borderRadius="md" bg="gray.50">
+                      <HStack spacing={3}>
+                        <Box
+                          w="42px"
+                          h="42px"
+                          borderRadius="full"
+                          bg={transaction.amount > 0 ? 'green.100' : 'red.100'}
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                        >
+                          {transaction.amount > 0 ? (
+                            <ArrowDownRight size={20} color="var(--chakra-colors-green-500)" />
+                          ) : (
+                            <ArrowUpRight size={20} color="var(--chakra-colors-red-500)" />
+                          )}
+                        </Box>
+                        <VStack align="flex-start" spacing={0}>
+                          <Text fontSize="sm" fontWeight="semibold" color="gray.800">
+                            {transaction.recipient_name || transaction.description || 'Transaction'}
+                          </Text>
+                          <Text fontSize="xs" color="gray.500">
+                            {formatDate(transaction.created_at)} • {transaction.category}
+                          </Text>
+                        </VStack>
+                      </HStack>
+                      <Text fontSize="sm" fontWeight="semibold" color={transaction.amount > 0 ? 'green.600' : 'red.500'}>
+                        {transaction.amount > 0 ? '+' : ''}{formatCurrency(Math.abs(transaction.amount))}
+                      </Text>
+                    </HStack>
+                  ))
+                ) : (
+                  <Text fontSize="sm" color="gray.500">No transactions recorded yet.</Text>
+                )}
+              </VStack>
+            </CardBody>
+          </Card>
+
+          {budgets.length > 0 && (
+            <Card bg="white" borderRadius="xl" boxShadow="md">
+              <CardBody>
+                <Flex justify="space-between" align="center" mb={4}>
+                  <Heading size="sm">Budget Tracker</Heading>
+                  <Button variant="ghost" size="xs" onClick={() => router.push('/budget')}>
+                    Manage budgets
+                  </Button>
+                </Flex>
+                <VStack spacing={4} align="stretch">
+                  {budgets.map((budget) => {
+                    const percentage = (budget.current_spending / budget.monthly_limit) * 100;
+                    const isOver = budget.current_spending > budget.monthly_limit;
+                    return (
+                      <Box key={budget.id}>
+                        <HStack justify="space-between" mb={1}>
+                          <Text fontSize="sm" fontWeight="semibold" color="gray.700">{budget.category}</Text>
+                          <Text fontSize="sm" color={isOver ? 'red.500' : 'gray.600'}>
+                            {formatCurrency(budget.current_spending)} / {formatCurrency(budget.monthly_limit)}
+                          </Text>
+                        </HStack>
+                        <Progress
+                          value={Math.min(percentage, 100)}
+                          colorScheme={isOver ? 'red' : percentage > 80 ? 'orange' : 'green'}
+                          borderRadius="full"
+                          size="sm"
+                        />
+                      </Box>
+                    );
+                  })}
+                </VStack>
+              </CardBody>
+            </Card>
+          )}
+
+          {promotions.length > 0 && (
+            <Card bgGradient="linear(to-r, purple.500, pink.500)" color="white" borderRadius="xl" boxShadow="md">
+              <CardBody>
+                <Heading size="sm" mb={4}>Rewards & Offers</Heading>
+                <VStack spacing={3} align="stretch">
+                  {promotions.map((promo) => (
+                    <Box key={promo.id} p={3} bg="whiteAlpha.200" borderRadius="md">
+                      <Text fontSize="sm" fontWeight="semibold">{promo.title}</Text>
+                      <Text fontSize="xs" opacity={0.9}>{promo.description}</Text>
+                    </Box>
+                  ))}
+                </VStack>
+              </CardBody>
+            </Card>
+          )}
+        </VStack>
+      </Grid>
+    </Box>
+  );
+
+  const modals = (
+    <>
       <Modal isOpen={isProfileOpen} onClose={onProfileClose}>
         <ModalOverlay />
         <ModalContent>
@@ -878,18 +1281,37 @@ function WalletPage() {
                 src={profile?.profile_image_url}
                 name={`${profile?.first_name || ''} ${profile?.last_name || ''}`}
               />
-              <Input
-                type="file"
-                accept="image/jpeg,image/jpg,image/png"
-                onChange={handleProfileImageUpload}
-                disabled={uploading}
-              />
-              {uploading && <Text fontSize="sm" color="gray.500">Uploading...</Text>}
+              <Button as="label" leftIcon={<Camera size={18} />}>
+                Choose Image
+                <Input type="file" display="none" accept="image/*" onChange={handleProfileImageUpload} />
+              </Button>
             </VStack>
           </ModalBody>
         </ModalContent>
       </Modal>
-    </Box>
+
+      <Modal isOpen={isTransferOpen} onClose={onTransferClose}>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Send Money</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            <VStack spacing={4} align="stretch">
+              <Input placeholder="Recipient" />
+              <Input placeholder="Amount" type="number" />
+              <Button colorScheme="purple">Continue</Button>
+            </VStack>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+    </>
+  );
+
+  return (
+    <>
+      {isDesktop ? desktopLayout : mobileLayout}
+      {modals}
+    </>
   );
 }
 

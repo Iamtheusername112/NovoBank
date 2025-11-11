@@ -138,6 +138,8 @@ function AccountsPageComponent() {
   
   const [accounts, setAccounts] = useState([]);
   const [cards, setCards] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
   const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
@@ -209,6 +211,20 @@ function AccountsPageComponent() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       setCards(cardsData || []);
+
+      const { data: notificationsData } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setNotifications(notificationsData || []);
+
+      const { data: alertsData } = await supabase
+        .from('alerts')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setAlerts(alertsData || []);
 
     } catch (error) {
       console.error('Error loading accounts:', error);
@@ -576,6 +592,8 @@ function AccountsPageComponent() {
   if (!mounted) {
     return null;
   }
+
+  const unreadCount = notifications.length + alerts.length;
 
   if (loading) {
     return (
@@ -1000,7 +1018,7 @@ function AccountsPageComponent() {
         </ModalContent>
       </Modal>
 
-      <BottomNavigation />
+      <BottomNavigation unreadCount={unreadCount} />
     </Box>
   );
 }
