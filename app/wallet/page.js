@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useState, useEffect } from 'react';
 import {
   Box,
@@ -59,7 +60,7 @@ import BottomNavigation from '@/components/BottomNavigation';
 
 const COLORS = ['#9c27b0', '#ec4899', '#f97316', '#ef4444', '#10b981', '#3b82f6'];
 
-export default function WalletPage() {
+function WalletPage() {
   const router = useRouter();
   const toast = useToast();
   const cardBg = useColorModeValue('white', 'gray.800');
@@ -891,3 +892,5 @@ export default function WalletPage() {
     </Box>
   );
 }
+
+export default dynamic(() => Promise.resolve(WalletPage), { ssr: false });
