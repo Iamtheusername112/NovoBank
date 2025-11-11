@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
 import {
   Box,
   Flex,
@@ -40,7 +40,7 @@ import StatusBar from '@/components/StatusBar';
 import BottomNavigation from '@/components/BottomNavigation';
 import QRCode from 'react-qr-code';
 
-export default function SendMoneyPage() {
+function SendMoneyContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const toast = useToast();
@@ -782,5 +782,13 @@ export default function SendMoneyPage() {
 
       <BottomNavigation />
     </Box>
+  );
+}
+
+export default function SendMoneyPage() {
+  return (
+    <Suspense fallback={null}>
+      <SendMoneyContent />
+    </Suspense>
   );
 }
