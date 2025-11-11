@@ -46,6 +46,7 @@ import {
   Building2,
   TrendingUp,
   PiggyBank,
+  Trash2,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -298,7 +299,7 @@ function AccountsPageComponent() {
       }
 
       const initialBalanceValue = parseFloat(linkForm.initialBalance || '0') || 0;
-      const payload = {
+      const buildPayload = (includeBranding = true) => ({
         user_id: user.id,
         account_type: linkForm.accountType,
         account_number: accountNumber,
@@ -306,19 +307,32 @@ function AccountsPageComponent() {
         balance: initialBalanceValue,
         currency: linkForm.currency,
         is_primary: accounts.length === 0,
-        bank_name: selectedBank?.name || null,
-        bank_logo: selectedBank?.logo || null,
-      };
+        ...(includeBranding && selectedBank
+          ? {
+              bank_name: selectedBank.name,
+              bank_logo: selectedBank.logo,
+            }
+          : {}),
+      });
 
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('accounts')
-        .insert(payload)
+        .insert(buildPayload(true))
         .select()
         .maybeSingle();
+
+      if (error && error.message && /column .*bank_/i.test(error.message)) {
+        ({ data, error } = await supabase
+          .from('accounts')
+          .insert(buildPayload(false))
+          .select()
+          .maybeSingle());
+      }
 
       if (error) {
         throw error;
       }
+
       if (!data) {
         throw new Error('Unable to link account right now. Please try again.');
       }
@@ -334,7 +348,7 @@ function AccountsPageComponent() {
       onLinkClose();
       loadAccounts();
     } catch (error) {
-      console.error('Link account error:', error);
+      console.error('Link account error:', error?.message ?? error);
       toast({
         title: 'Failed to link account',
         description: error.message || 'We could not link this account. Please try again.',
@@ -492,6 +506,43 @@ function AccountsPageComponent() {
       toast({
         title: 'Error',
         description: 'Failed to download statement',
+        status: 'error',
+        duration: 3000,
+      });
+    }
+  };
+
+  const handleUnlinkAccount = async (account) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/login');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('accounts')
+        .delete()
+        .eq('id', account.id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: 'Account removed',
+        description: `${account.account_name} has been unlinked.`,
+        status: 'success',
+        duration: 3000,
+      });
+
+      loadAccounts();
+    } catch (error) {
+      console.error('Unlink account error:', error);
+      toast({
+        title: 'Unable to remove account',
+        description: error.message || 'We could not unlink that account. Try again later.',
         status: 'error',
         duration: 3000,
       });
@@ -678,6 +729,12 @@ function AccountsPageComponent() {
                           onClick={() => handleDownloadStatement(account, 'year')}
                         >
                           Download Statement (Last Year)
+                        </MenuItem>
+                        <MenuItem
+                          icon={<Trash2 size={16} />}
+                          onClick={() => handleUnlinkAccount(account)}
+                        >
+                          Unlink Account
                         </MenuItem>
                       </MenuList>
                     </Menu>
