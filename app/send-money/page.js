@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, Suspense } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Box,
   Flex,
@@ -34,15 +34,14 @@ import {
   Badge,
 } from '@chakra-ui/react';
 import { ArrowLeft, ChevronDown, CreditCard, X, ArrowRight, QrCode, Calendar, Clock } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import StatusBar from '@/components/StatusBar';
 import BottomNavigation from '@/components/BottomNavigation';
-import QRCode from 'react-qr-code';
 
 function SendMoneyContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const toast = useToast();
   const cardBg = useColorModeValue('white', 'gray.800');
   const bgColor = useColorModeValue('gray.100', 'gray.900');
@@ -73,12 +72,14 @@ function SendMoneyContent() {
   useEffect(() => {
     setMounted(true);
     loadAccountsAndFavorites();
-    
-    // Check if coming from schedule link
-    if (searchParams.get('schedule') === 'true') {
-      setIsScheduled(true);
+
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('schedule') === 'true') {
+        setIsScheduled(true);
+      }
     }
-  }, [searchParams]);
+  }, []);
 
   const loadAccountsAndFavorites = async () => {
     try {
@@ -373,12 +374,30 @@ function SendMoneyContent() {
     });
   };
 
+  const getQRImageUrl = (size) => {
+    const baseUrl = 'https://api.qrserver.com/v1/create-qr-code/';
+    const params = new URLSearchParams({
+      size: `${size}x${size}`,
+      data: generateQRData(),
+      format: 'svg',
+      margin: '0',
+    });
+    return `${baseUrl}?${params.toString()}`;
+  };
+
   if (!mounted) {
     return null;
   }
 
   return (
-    <Box minH="100vh" bg={bgColor} pb="80px">
+    <Box
+      minH="100vh"
+      bg={bgColor}
+      pb={{
+        base: 'calc(env(safe-area-inset-bottom, 0px) + 180px)',
+        md: '120px',
+      }}
+    >
       <StatusBar />
       <Box px={4} py={4}>
         <Flex justify="space-between" align="center" mb={6}>
@@ -467,7 +486,12 @@ function SendMoneyContent() {
                       Scan QR code to send payment
                     </Text>
                     <Box p={4} bg="white" borderRadius="md" display="flex" justifyContent="center">
-                      <QRCode value={generateQRData()} size={200} />
+                      <Image
+                        src={getQRImageUrl(200)}
+                        alt="Payment QR code"
+                        width={200}
+                        height={200}
+                      />
                     </Box>
                     <Button
                       size="sm"
@@ -591,7 +615,19 @@ function SendMoneyContent() {
           </VStack>
         </VStack>
 
-        <Box position="fixed" bottom={4} left={4} right={4} zIndex={100}>
+        <Box
+          position="fixed"
+          bottom={{
+            base: 'calc(env(safe-area-inset-bottom, 0px) + 120px)',
+            md: '48px',
+          }}
+          left={{ base: 4, md: '50%' }}
+          right={{ base: 4, md: 'auto' }}
+          transform={{ base: 'none', md: 'translateX(-50%)' }}
+          maxW={{ base: 'auto', md: '420px' }}
+          mx="auto"
+          zIndex={100}
+        >
           <Box
             bg={isScheduled ? 'purple.400' : 'purple.600'}
             borderRadius="full"
@@ -765,7 +801,12 @@ function SendMoneyContent() {
                 Share this QR code to receive payment
               </Text>
               <Box p={4} bg="white" borderRadius="md" display="flex" justifyContent="center">
-                <QRCode value={generateQRData()} size={256} />
+                <Image
+                  src={getQRImageUrl(256)}
+                  alt="Payment QR code"
+                  width={256}
+                  height={256}
+                />
               </Box>
               <Text fontSize="xs" color="gray.500" textAlign="center">
                 Amount: {formatCurrency(parseFloat(amount) || 0)}
@@ -786,9 +827,5 @@ function SendMoneyContent() {
 }
 
 export default function SendMoneyPage() {
-  return (
-    <Suspense fallback={null}>
-      <SendMoneyContent />
-    </Suspense>
-  );
+  return <SendMoneyContent />;
 }
