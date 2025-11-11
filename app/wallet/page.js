@@ -323,20 +323,10 @@ export default function WalletPage() {
         }
         break;
       case 'deposit':
-        toast({
-          title: 'Deposit',
-          description: 'Deposit feature coming soon',
-          status: 'info',
-          duration: 3000,
-        });
+        router.push('/deposit');
         break;
       case 'bills':
-        toast({
-          title: 'Bills',
-          description: 'Bills feature coming soon',
-          status: 'info',
-          duration: 3000,
-        });
+        router.push('/bills');
         break;
       default:
         break;
@@ -450,12 +440,28 @@ export default function WalletPage() {
               
               {accounts.length > 0 && (
                 <VStack align="stretch" spacing={2}>
-                  {accounts.map((account) => (
-                    <HStack key={account.id} justify="space-between" p={2} bg="gray.50" borderRadius="md">
+                  {accounts.slice(0, 3).map((account) => (
+                    <HStack 
+                      key={account.id} 
+                      justify="space-between" 
+                      p={2} 
+                      bg="gray.50" 
+                      borderRadius="md"
+                      cursor="pointer"
+                      onClick={() => router.push('/accounts')}
+                      _hover={{ bg: 'gray.100' }}
+                    >
                       <VStack align="flex-start" spacing={0}>
-                        <Text fontSize="sm" fontWeight="semibold" color="gray.700">
-                          {account.account_name}
-                        </Text>
+                        <HStack spacing={2}>
+                          <Text fontSize="sm" fontWeight="semibold" color="gray.700">
+                            {account.account_name}
+                          </Text>
+                          {account.is_primary && (
+                            <Badge colorScheme="purple" fontSize="xs" borderRadius="full">
+                              Primary
+                            </Badge>
+                          )}
+                        </HStack>
                         <Text fontSize="xs" color="gray.500">
                           {account.account_type.toUpperCase()} ••••{account.account_number.slice(-4)}
                         </Text>
@@ -465,6 +471,16 @@ export default function WalletPage() {
                       </Text>
                     </HStack>
                   ))}
+                  {accounts.length > 3 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => router.push('/accounts')}
+                      mt={2}
+                    >
+                      View All Accounts ({accounts.length})
+                    </Button>
+                  )}
                 </VStack>
               )}
             </VStack>
@@ -504,19 +520,29 @@ export default function WalletPage() {
           </Card>
         )}
 
-        {/* Quick Actions */}
-        <Card bg={cardBg} borderRadius="xl" mb={4} boxShadow="md">
-          <CardBody>
-            <Text fontSize="lg" fontWeight="semibold" color="gray.800" mb={4}>
-              Quick Actions
-            </Text>
-            <HStack spacing={3} justify="space-around">
-              {[
-                { icon: Send, label: 'Transfer', action: 'transfer', color: 'purple' },
-                { icon: Receipt, label: 'Pay Bills', action: 'bills', color: 'blue' },
-                { icon: Upload, label: 'Deposit', action: 'deposit', color: 'green' },
-                { icon: Shield, label: primaryCard?.is_frozen ? 'Unfreeze' : 'Freeze', action: 'freeze', color: 'orange' },
-              ].map(({ icon: Icon, label, action, color }) => (
+            {/* Quick Actions */}
+            <Card bg={cardBg} borderRadius="xl" mb={4} boxShadow="md">
+              <CardBody>
+                <HStack justify="space-between" mb={4}>
+                  <Text fontSize="lg" fontWeight="semibold" color="gray.800">
+                    Quick Actions
+                  </Text>
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    colorScheme="purple"
+                    onClick={() => router.push('/scheduled-payments')}
+                  >
+                    View Scheduled
+                  </Button>
+                </HStack>
+                <HStack spacing={3} justify="space-around">
+                  {[
+                    { icon: Send, label: 'Transfer', action: 'transfer', color: 'purple' },
+                    { icon: Receipt, label: 'Pay Bills', action: 'bills', color: 'blue' },
+                    { icon: Upload, label: 'Deposit', action: 'deposit', color: 'green' },
+                    { icon: Shield, label: primaryCard?.is_frozen ? 'Unfreeze' : 'Freeze', action: 'freeze', color: 'orange' },
+                  ].map(({ icon: Icon, label, action, color }) => (
                 <VStack
                   key={action}
                   spacing={2}
@@ -610,11 +636,21 @@ export default function WalletPage() {
         {budgets.length > 0 && (
           <Card bg={cardBg} borderRadius="xl" mb={4} boxShadow="md">
             <CardBody>
-              <Text fontSize="lg" fontWeight="semibold" color="gray.800" mb={4}>
-                Budget Progress
-              </Text>
+              <Flex justify="space-between" align="center" mb={4}>
+                <Text fontSize="lg" fontWeight="semibold" color="gray.800">
+                  Budget Progress
+                </Text>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  colorScheme="purple"
+                  onClick={() => router.push('/budget')}
+                >
+                  Manage
+                </Button>
+              </Flex>
               <VStack spacing={3} align="stretch">
-                {budgets.map((budget) => {
+                {budgets.slice(0, 3).map((budget) => {
                   const percentage = (budget.current_spending / budget.monthly_limit) * 100;
                   const isOver = budget.current_spending > budget.monthly_limit;
                   return (
@@ -636,6 +672,16 @@ export default function WalletPage() {
                     </Box>
                   );
                 })}
+                {budgets.length > 3 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.push('/budget')}
+                    mt={2}
+                  >
+                    View All Budgets ({budgets.length})
+                  </Button>
+                )}
               </VStack>
             </CardBody>
           </Card>

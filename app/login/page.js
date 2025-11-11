@@ -523,8 +523,6 @@ export default function LoginPage() {
               Forgot your password? Contact support for assistance.
             </Text>
           </VStack>
-            </VStack>
-          </Box>
         </VStack>
       </Flex>
     </Box>
