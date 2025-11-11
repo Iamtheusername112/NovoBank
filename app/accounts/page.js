@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Flex,
@@ -26,10 +27,13 @@ import {
   FormControl,
   FormLabel,
   Select,
+  FormErrorMessage,
+  FormHelperText,
   Menu,
   MenuButton,
   MenuList,
   MenuItem,
+  Image,
 } from '@chakra-ui/react';
 import {
   ArrowLeft,
@@ -57,7 +61,75 @@ const CURRENCIES = [
   { code: 'AUD', symbol: 'A$', name: 'Australian Dollar' },
 ];
 
-export default function AccountsPage() {
+const GLOBAL_BANK_DIRECTORY = [
+  { name: 'Bank of America', slug: 'bank-of-america', logo: 'https://logo.clearbit.com/bankofamerica.com' },
+  { name: 'JPMorgan Chase', slug: 'jpmorgan', logo: 'https://logo.clearbit.com/jpmorganchase.com' },
+  { name: 'Citibank', slug: 'citibank', logo: 'https://logo.clearbit.com/citi.com' },
+  { name: 'Wells Fargo', slug: 'wells-fargo', logo: 'https://logo.clearbit.com/wellsfargo.com' },
+  { name: 'Goldman Sachs', slug: 'goldman-sachs', logo: 'https://logo.clearbit.com/goldmansachs.com' },
+  { name: 'Morgan Stanley', slug: 'morgan-stanley', logo: 'https://logo.clearbit.com/morganstanley.com' },
+  { name: 'HSBC', slug: 'hsbc', logo: 'https://logo.clearbit.com/hsbc.com' },
+  { name: 'Barclays', slug: 'barclays', logo: 'https://logo.clearbit.com/barclays.co.uk' },
+  { name: 'Lloyds Bank', slug: 'lloyds-bank', logo: 'https://logo.clearbit.com/lloydsbank.com' },
+  { name: 'Santander', slug: 'santander', logo: 'https://logo.clearbit.com/santander.com' },
+  { name: 'Deutsche Bank', slug: 'deutsche-bank', logo: 'https://logo.clearbit.com/db.com' },
+  { name: 'BNP Paribas', slug: 'bnp-paribas', logo: 'https://logo.clearbit.com/group.bnpparibas' },
+  { name: 'Credit Suisse', slug: 'credit-suisse', logo: 'https://logo.clearbit.com/creditsuisse.com' },
+  { name: 'UBS', slug: 'ubs', logo: 'https://logo.clearbit.com/ubs.com' },
+  { name: 'ING Bank', slug: 'ing-bank', logo: 'https://logo.clearbit.com/ing.com' },
+  { name: 'Rabobank', slug: 'rabobank', logo: 'https://logo.clearbit.com/rabobank.com' },
+  { name: 'Societe Generale', slug: 'societe-generale', logo: 'https://logo.clearbit.com/societegenerale.com' },
+  { name: 'Standard Chartered', slug: 'standard-chartered', logo: 'https://logo.clearbit.com/sc.com' },
+  { name: 'Royal Bank of Canada', slug: 'royal-bank-of-canada', logo: 'https://logo.clearbit.com/rbc.com' },
+  { name: 'Toronto-Dominion Bank', slug: 'td-bank', logo: 'https://logo.clearbit.com/td.com' },
+  { name: 'Scotiabank', slug: 'scotiabank', logo: 'https://logo.clearbit.com/scotiabank.com' },
+  { name: 'Banco do Brasil', slug: 'banco-do-brasil', logo: 'https://logo.clearbit.com/bb.com.br' },
+  { name: 'Itau Unibanco', slug: 'itau', logo: 'https://logo.clearbit.com/itau.com.br' },
+  { name: 'Bradesco', slug: 'bradesco', logo: 'https://logo.clearbit.com/bradesco.com.br' },
+  { name: 'Banco Santander Mexico', slug: 'santander-mexico', logo: 'https://logo.clearbit.com/santander.com.mx' },
+  { name: 'BBVA', slug: 'bbva', logo: 'https://logo.clearbit.com/bbva.com' },
+  { name: 'CaixaBank', slug: 'caixabank', logo: 'https://logo.clearbit.com/caixabank.com' },
+  { name: 'Intesa Sanpaolo', slug: 'intesa-sanpaolo', logo: 'https://logo.clearbit.com/intesasanpaolo.com' },
+  { name: 'UniCredit', slug: 'unicredit', logo: 'https://logo.clearbit.com/unicreditgroup.eu' },
+  { name: 'Bank Mandiri', slug: 'bank-mandiri', logo: 'https://logo.clearbit.com/bankmandiri.co.id' },
+  { name: 'Bank Central Asia', slug: 'bca', logo: 'https://logo.clearbit.com/bca.co.id' },
+  { name: 'Industrial and Commercial Bank of China', slug: 'icbc', logo: 'https://logo.clearbit.com/icbc-ltd.com' },
+  { name: 'China Construction Bank', slug: 'ccb', logo: 'https://logo.clearbit.com/ccb.com' },
+  { name: 'Bank of China', slug: 'bank-of-china', logo: 'https://logo.clearbit.com/boc.cn' },
+  { name: 'Agricultural Bank of China', slug: 'abc', logo: 'https://logo.clearbit.com/abchina.com' },
+  { name: 'State Bank of India', slug: 'sbi', logo: 'https://logo.clearbit.com/sbi.co.in' },
+  { name: 'HDFC Bank', slug: 'hdfc-bank', logo: 'https://logo.clearbit.com/hdfcbank.com' },
+  { name: 'ICICI Bank', slug: 'icici-bank', logo: 'https://logo.clearbit.com/icicibank.com' },
+  { name: 'Axis Bank', slug: 'axis-bank', logo: 'https://logo.clearbit.com/axisbank.com' },
+  { name: 'Kotak Mahindra Bank', slug: 'kotak-bank', logo: 'https://logo.clearbit.com/kotak.com' },
+  { name: 'Bank of Montreal', slug: 'bank-of-montreal', logo: 'https://logo.clearbit.com/bmo.com' },
+  { name: 'Australia and New Zealand Banking Group', slug: 'anz', logo: 'https://logo.clearbit.com/anz.com' },
+  { name: 'Commonwealth Bank', slug: 'commonwealth-bank', logo: 'https://logo.clearbit.com/commbank.com.au' },
+  { name: 'Westpac', slug: 'westpac', logo: 'https://logo.clearbit.com/westpac.com.au' },
+  { name: 'National Australia Bank', slug: 'nab', logo: 'https://logo.clearbit.com/nab.com.au' },
+  { name: 'First National Bank (South Africa)', slug: 'fnb', logo: 'https://logo.clearbit.com/fnb.co.za' },
+  { name: 'Standard Bank', slug: 'standard-bank', logo: 'https://logo.clearbit.com/standardbank.co.za' },
+  { name: 'Nedbank', slug: 'nedbank', logo: 'https://logo.clearbit.com/nedbank.co.za' },
+  { name: 'Absa Bank', slug: 'absa-bank', logo: 'https://logo.clearbit.com/absa.co.za' },
+  { name: 'Emirates NBD', slug: 'emirates-nbd', logo: 'https://logo.clearbit.com/emiratesnbd.com' },
+  { name: 'Qatar National Bank', slug: 'qnb', logo: 'https://logo.clearbit.com/qnb.com' },
+  { name: 'Mashreq Bank', slug: 'mashreq', logo: 'https://logo.clearbit.com/mashreqbank.com' },
+  { name: 'Banco de Chile', slug: 'banco-de-chile', logo: 'https://logo.clearbit.com/bancochile.cl' },
+  { name: 'Banco Itau Chile', slug: 'itau-chile', logo: 'https://logo.clearbit.com/itau.cl' },
+  { name: 'Bank Rakyat Indonesia', slug: 'bri', logo: 'https://logo.clearbit.com/bri.co.id' },
+  { name: 'Habib Bank', slug: 'habib-bank', logo: 'https://logo.clearbit.com/hbl.com' },
+  { name: 'Kiwibank', slug: 'kiwibank', logo: 'https://logo.clearbit.com/kiwibank.co.nz' },
+  { name: 'Banco Macro', slug: 'banco-macro', logo: 'https://logo.clearbit.com/macro.com.ar' },
+  { name: 'Banorte', slug: 'banorte', logo: 'https://logo.clearbit.com/banorte.com' },
+  { name: 'Kenya Commercial Bank', slug: 'kcb', logo: 'https://logo.clearbit.com/kcbgroup.com' },
+  { name: 'National Bank of Egypt', slug: 'nbe', logo: 'https://logo.clearbit.com/nbe.com.eg' },
+  { name: 'Ziraat Bank', slug: 'ziraat', logo: 'https://logo.clearbit.com/ziraatbank.com.tr' },
+  { name: 'Danske Bank', slug: 'danske-bank', logo: 'https://logo.clearbit.com/danskebank.com' },
+  { name: 'Skandinaviska Enskilda Banken', slug: 'seb', logo: 'https://logo.clearbit.com/seb.se' },
+  { name: 'Nordea Bank', slug: 'nordea', logo: 'https://logo.clearbit.com/nordea.com' },
+];
+
+function AccountsPageComponent() {
   const router = useRouter();
   const toast = useToast();
   const cardBg = useColorModeValue('white', 'gray.800');
@@ -74,6 +146,36 @@ export default function AccountsPage() {
     currency: 'USD',
     is_primary: false,
   });
+  const {
+    isOpen: isLinkOpen,
+    onOpen: onLinkOpen,
+    onClose: onLinkClose,
+  } = useDisclosure();
+  const [bankSearch, setBankSearch] = useState('');
+  const [selectedBank, setSelectedBank] = useState('');
+  const [linkingAccount, setLinkingAccount] = useState(false);
+  const [linkForm, setLinkForm] = useState({
+    accountNickname: '',
+    accountNumber: '',
+    accountType: 'checking',
+    currency: 'USD',
+    initialBalance: '',
+  });
+  const [linkErrors, setLinkErrors] = useState({
+    bank: '',
+    accountNumber: '',
+    nickname: '',
+  });
+
+  const filteredBanks = useMemo(() => {
+    if (!bankSearch) {
+      return GLOBAL_BANK_DIRECTORY;
+    }
+    const query = bankSearch.toLowerCase();
+    return GLOBAL_BANK_DIRECTORY.filter((bank) =>
+      bank.name.toLowerCase().includes(query)
+    );
+  }, [bankSearch]);
 
   useEffect(() => {
     setMounted(true);
@@ -117,6 +219,130 @@ export default function AccountsPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resetLinkAccountState = () => {
+    setBankSearch('');
+    setSelectedBank(null);
+    setLinkForm({
+      accountNickname: '',
+      accountNumber: '',
+      accountType: 'checking',
+      currency: 'USD',
+      initialBalance: '',
+    });
+    setLinkErrors({
+      bank: '',
+      accountNumber: '',
+      nickname: '',
+    });
+  };
+
+  const handleOpenLinkModal = () => {
+    resetLinkAccountState();
+    onLinkOpen();
+  };
+
+  const handleBankSelection = (bank) => {
+    setSelectedBank(bank);
+    setLinkErrors((prev) => ({ ...prev, bank: '' }));
+    setLinkForm((prev) => ({
+      ...prev,
+      accountNickname: prev.accountNickname || bank.name,
+    }));
+  };
+
+  const handleLinkInputChange = (field) => (event) => {
+    let value = event.target.value;
+    if (field === 'accountNumber') {
+      value = value.replace(/\s+/g, '');
+    }
+    if (field === 'initialBalance' && Number(value) < 0) {
+      value = '0';
+    }
+    setLinkForm((prev) => ({ ...prev, [field]: value }));
+    if (field === 'accountNickname') {
+      setLinkErrors((prev) => ({ ...prev, nickname: '' }));
+    }
+    if (field === 'accountNumber') {
+      setLinkErrors((prev) => ({ ...prev, accountNumber: '' }));
+    }
+  };
+
+  const handleCloseLinkModal = () => {
+    if (linkingAccount) return;
+    resetLinkAccountState();
+    onLinkClose();
+  };
+
+  const handleSubmitLinkAccount = async () => {
+    const nickname = linkForm.accountNickname.trim();
+    const accountNumber = linkForm.accountNumber.trim();
+    const errors = {
+      bank: selectedBank ? '' : 'Select a bank to continue',
+      accountNumber: accountNumber ? '' : 'Account number is required',
+      nickname: nickname ? '' : 'Nickname is required',
+    };
+    setLinkErrors(errors);
+    if (errors.bank || errors.accountNumber || errors.nickname) {
+      return;
+    }
+
+    setLinkingAccount(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/login');
+        return;
+      }
+
+      const initialBalanceValue = parseFloat(linkForm.initialBalance || '0') || 0;
+      const payload = {
+        user_id: user.id,
+        account_type: linkForm.accountType,
+        account_number: accountNumber,
+        account_name: nickname,
+        balance: initialBalanceValue,
+        currency: linkForm.currency,
+        is_primary: accounts.length === 0,
+        bank_name: selectedBank?.name || null,
+        bank_logo: selectedBank?.logo || null,
+      };
+
+      const { data, error } = await supabase
+        .from('accounts')
+        .insert(payload)
+        .select()
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+      if (!data) {
+        throw new Error('Unable to link account right now. Please try again.');
+      }
+
+      toast({
+        title: 'Bank account linked',
+        description: `${nickname} has been added to your wallet.`,
+        status: 'success',
+        duration: 3000,
+      });
+
+      resetLinkAccountState();
+      onLinkClose();
+      loadAccounts();
+    } catch (error) {
+      console.error('Link account error:', error);
+      toast({
+        title: 'Failed to link account',
+        description: error.message || 'We could not link this account. Please try again.',
+        status: 'error',
+        duration: 3000,
+      });
+    } finally {
+      setLinkingAccount(false);
     }
   };
 
@@ -331,6 +557,9 @@ export default function AccountsPage() {
               My Accounts
             </Text>
           </HStack>
+          <Button colorScheme="purple" onClick={handleOpenLinkModal}>
+            Link Bank Account
+          </Button>
         </Flex>
       </Box>
 
@@ -358,17 +587,43 @@ export default function AccountsPage() {
               <Card key={account.id} bg={cardBg} borderRadius="xl" boxShadow="md">
                 <CardBody p={4}>
                   <Flex justify="space-between" align="flex-start">
-                    <HStack spacing={3} flex={1}>
+                    <HStack spacing={3} flex={1} align="flex-start">
                       <Box
                         w="50px"
                         h="50px"
                         borderRadius="full"
-                        bg={`${account.account_type === 'checking' ? 'blue' : account.account_type === 'savings' ? 'green' : account.account_type === 'credit' ? 'orange' : 'purple'}.100`}
+                        bg={
+                          account.bank_logo
+                            ? 'gray.100'
+                            : `${account.account_type === 'checking' ? 'blue' : account.account_type === 'savings' ? 'green' : account.account_type === 'credit' ? 'orange' : 'purple'}.100`
+                        }
                         display="flex"
                         alignItems="center"
                         justifyContent="center"
+                        overflow="hidden"
                       >
-                        {getAccountIcon(account.account_type)}
+                        {account.bank_logo ? (
+                          <Image
+                            src={account.bank_logo}
+                            alt={`${account.bank_name || account.account_name} logo`}
+                            boxSize="36px"
+                            objectFit="contain"
+                            fallback={
+                              <Box
+                                boxSize="36px"
+                                borderRadius="full"
+                                bg="gray.200"
+                                display="flex"
+                                alignItems="center"
+                                justifyContent="center"
+                              >
+                                {getAccountIcon(account.account_type)}
+                              </Box>
+                            }
+                          />
+                        ) : (
+                          getAccountIcon(account.account_type)
+                        )}
                       </Box>
                       <VStack align="flex-start" spacing={1} flex={1}>
                         <HStack spacing={2}>
@@ -386,6 +641,7 @@ export default function AccountsPage() {
                           </Badge>
                         </HStack>
                         <Text fontSize="xs" color="gray.600">
+                          {account.bank_name ? `${account.bank_name} • ` : ''}
                           {account.account_type.toUpperCase()} ••••{account.account_number.slice(-4)}
                         </Text>
                         <Text fontSize="2xl" fontWeight="bold" color="gray.800">
@@ -539,9 +795,157 @@ export default function AccountsPage() {
         </ModalContent>
       </Modal>
 
+      {/* Link Bank Account Modal */}
+      <Modal isOpen={isLinkOpen} onClose={handleCloseLinkModal} size="xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Link an external bank account</ModalHeader>
+          <ModalCloseButton isDisabled={linkingAccount} />
+          <ModalBody>
+            <VStack align="stretch" spacing={4}>
+              <FormControl isRequired isInvalid={Boolean(linkErrors.bank)}>
+                <FormLabel>Search worldwide banks</FormLabel>
+                <Input
+                  placeholder="Type bank name (e.g. HSBC, HDFC, Santander)"
+                  value={bankSearch}
+                  onChange={(e) => setBankSearch(e.target.value)}
+                  size="lg"
+                />
+                <Box
+                  mt={3}
+                  maxH="200px"
+                  overflowY="auto"
+                  border="1px solid"
+                  borderColor="gray.200"
+                  borderRadius="md"
+                  p={2}
+                >
+                  <VStack align="stretch" spacing={1}>
+                    {filteredBanks.length === 0 && (
+                      <Text fontSize="sm" color="gray.500" px={2} py={2}>
+                        No banks match your search. Try a different name.
+                      </Text>
+                    )}
+                    {filteredBanks.map((bank) => (
+                      <Button
+                        key={bank.slug}
+                        variant={selectedBank?.slug === bank.slug ? 'solid' : 'ghost'}
+                        colorScheme={selectedBank?.slug === bank.slug ? 'purple' : 'gray'}
+                        justifyContent="flex-start"
+                        onClick={() => handleBankSelection(bank)}
+                        leftIcon={
+                          <Image
+                            src={bank.logo}
+                            alt={`${bank.name} logo`}
+                            boxSize="24px"
+                            objectFit="contain"
+                            fallback={
+                              <Box
+                                boxSize="24px"
+                                borderRadius="full"
+                                bg="gray.200"
+                                display="flex"
+                                alignItems="center"
+                                justifyContent="center"
+                              >
+                                <Building2 size={14} color="#6b7280" />
+                              </Box>
+                            }
+                          />
+                        }
+                      >
+                        {bank.name}
+                      </Button>
+                    ))}
+                  </VStack>
+                </Box>
+                <FormErrorMessage>{linkErrors.bank}</FormErrorMessage>
+              </FormControl>
+
+              <FormControl isRequired isInvalid={Boolean(linkErrors.nickname)}>
+                <FormLabel>Account nickname</FormLabel>
+                <Input
+                  placeholder="e.g. HSBC Checking"
+                  value={linkForm.accountNickname}
+                  onChange={handleLinkInputChange('accountNickname')}
+                  size="lg"
+                />
+                <FormErrorMessage>{linkErrors.nickname}</FormErrorMessage>
+              </FormControl>
+
+              <FormControl isRequired isInvalid={Boolean(linkErrors.accountNumber)}>
+                <FormLabel>Account number</FormLabel>
+                <Input
+                  placeholder="Enter account number"
+                  value={linkForm.accountNumber}
+                  onChange={handleLinkInputChange('accountNumber')}
+                  size="lg"
+                />
+                <FormHelperText>We never share this information without your consent.</FormHelperText>
+                <FormErrorMessage>{linkErrors.accountNumber}</FormErrorMessage>
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Account type</FormLabel>
+                <Select
+                  value={linkForm.accountType}
+                  onChange={handleLinkInputChange('accountType')}
+                  size="lg"
+                >
+                  <option value="checking">Checking</option>
+                  <option value="savings">Savings</option>
+                  <option value="credit">Credit</option>
+                  <option value="investment">Investment</option>
+                </Select>
+              </FormControl>
+
+              <HStack spacing={4}>
+                <FormControl>
+                  <FormLabel>Currency</FormLabel>
+                  <Select
+                    value={linkForm.currency}
+                    onChange={handleLinkInputChange('currency')}
+                    size="lg"
+                  >
+                    {CURRENCIES.map((curr) => (
+                      <option key={curr.code} value={curr.code}>
+                        {curr.code}
+                      </option>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl>
+                  <FormLabel>Current balance (optional)</FormLabel>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={linkForm.initialBalance}
+                    onChange={handleLinkInputChange('initialBalance')}
+                    placeholder="0.00"
+                  />
+                </FormControl>
+              </HStack>
+
+              <Text fontSize="sm" color="gray.500">
+                By linking this account you authorise NovoBank to initiate transfers and display balances on your dashboard.
+              </Text>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={handleCloseLinkModal} isDisabled={linkingAccount}>
+              Cancel
+            </Button>
+            <Button colorScheme="purple" onClick={handleSubmitLinkAccount} isLoading={linkingAccount}>
+              Link account
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
       <BottomNavigation />
     </Box>
   );
 }
 
-
+export default dynamic(() => Promise.resolve(AccountsPageComponent), { ssr: false });
