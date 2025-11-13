@@ -29,6 +29,7 @@ import {
   Star,
   CreditCard,
   LogOut,
+  Bell,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -44,6 +45,8 @@ export default function ProfilePage() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [unreadAlertCount, setUnreadAlertCount] = useState(0);
   const cardBg = useColorModeValue('white', 'gray.800');
 
   useEffect(() => {
@@ -74,6 +77,21 @@ export default function ProfilePage() {
       } else {
         setProfile(profileData);
       }
+
+      // Load notification counts
+      const { data: notificationsData } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('user_id', currentUser.id)
+        .eq('is_read', false);
+      setUnreadNotificationCount((notificationsData || []).length);
+
+      const { data: alertsData } = await supabase
+        .from('alerts')
+        .select('id')
+        .eq('user_id', currentUser.id)
+        .eq('is_read', false);
+      setUnreadAlertCount((alertsData || []).length);
     } catch (error) {
       console.error('Error loading user data:', error);
     } finally {
@@ -145,7 +163,7 @@ export default function ProfilePage() {
               </Text>
             </VStack>
           </HStack>
-          <NotificationBell count={0} size={20} />
+          <NotificationBell count={unreadNotificationCount + unreadAlertCount} size={20} />
         </HStack>
 
         <Tabs colorScheme="brand" mb={6}>

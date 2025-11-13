@@ -28,7 +28,9 @@ export default function NotificationBell({
 }) {
   const router = useRouter();
   
-  const hasNotifications = count > 0;
+  // Ensure count is a number and greater than 0
+  const numericCount = Number(count) || 0;
+  const hasNotifications = numericCount > 0;
   
   const handleClick = () => {
     if (onClick) {
@@ -64,7 +66,7 @@ export default function NotificationBell({
       <IconButton
         icon={<Bell size={typeof size === 'number' ? size : size === 'sm' ? 18 : size === 'lg' ? 24 : 20} />}
         variant={variant}
-        aria-label={`Notifications${hasNotifications ? ` (${count} unread)` : ''}`}
+        aria-label={`Notifications${hasNotifications ? ` (${numericCount} unread)` : ''}`}
         onClick={handleClick}
         {...props}
       />
@@ -84,7 +86,7 @@ export default function NotificationBell({
           px={showCount ? 1 : 0}
           boxShadow="0 2px 4px rgba(0,0,0,0.2)"
         >
-          {showCount ? formatCount(count) : ''}
+          {showCount ? formatCount(numericCount) : ''}
         </Badge>
       )}
     </Box>

@@ -84,6 +84,8 @@ function WalletPage() {
   const [transactions, setTransactions] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [unreadAlertCount, setUnreadAlertCount] = useState(0);
   const [promotions, setPromotions] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -179,25 +181,27 @@ function WalletPage() {
       setSpendingData(spendingArray);
       setMonthlySpending(Object.values(categorySpending).reduce((sum, val) => sum + val, 0));
 
-      // Load notifications
+      // Load notifications (all unread for count, but limit display to 5)
       const { data: notificationsData } = await supabase
         .from('notifications')
         .select('*')
         .eq('user_id', currentUser.id)
         .eq('is_read', false)
-        .order('created_at', { ascending: false })
-        .limit(5);
-      setNotifications(notificationsData || []);
+        .order('created_at', { ascending: false });
+      const allNotifications = notificationsData || [];
+      setUnreadNotificationCount(allNotifications.length);
+      setNotifications(allNotifications.slice(0, 5)); // Store only 5 for display
 
-      // Load alerts
+      // Load alerts (all unread for count, but limit display to 5)
       const { data: alertsData } = await supabase
         .from('alerts')
         .select('*')
         .eq('user_id', currentUser.id)
         .eq('is_read', false)
-        .order('created_at', { ascending: false })
-        .limit(5);
-      setAlerts(alertsData || []);
+        .order('created_at', { ascending: false });
+      const allAlerts = alertsData || [];
+      setUnreadAlertCount(allAlerts.length);
+      setAlerts(allAlerts.slice(0, 5)); // Store only 5 for display
 
       // Load promotions
       const { data: promotionsData } = await supabase
@@ -397,7 +401,7 @@ function WalletPage() {
   }
 
   const primaryCard = cards.find(c => !c.is_frozen) || cards[0];
-  const unreadCount = notifications.length + alerts.length;
+  const unreadCount = unreadNotificationCount + unreadAlertCount;
   const accountStatus = profile?.account_status || 'active';
   const accountStatusReason = profile?.account_status_reason || '';
   const canTransact = accountStatus === 'active';

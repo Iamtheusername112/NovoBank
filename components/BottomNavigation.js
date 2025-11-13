@@ -43,8 +43,9 @@ export default function BottomNavigation({ unreadCount = 0 }) {
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.path);
+          const numericCount = Number(unreadCount) || 0;
           const showBadge =
-            item.path === '/notifications' && unreadCount && unreadCount > 0;
+            item.path === '/notifications' && numericCount > 0;
           return (
             <Flex
               key={item.path}
@@ -83,7 +84,7 @@ export default function BottomNavigation({ unreadCount = 0 }) {
                     px={1}
                     boxShadow="0 2px 4px rgba(0,0,0,0.2)"
                   >
-                    {unreadCount > 99 ? '99+' : unreadCount}
+                    {numericCount > 99 ? '99+' : numericCount}
                   </Badge>
                 )}
               </Box>
