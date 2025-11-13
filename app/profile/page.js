@@ -22,7 +22,6 @@ import {
   Avatar,
 } from '@chakra-ui/react';
 import {
-  Bell,
   Moon,
   Lock,
   Globe,
@@ -35,6 +34,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import StatusBar from '@/components/StatusBar';
 import BottomNavigation from '@/components/BottomNavigation';
+import NotificationBell from '@/components/NotificationBell';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -145,11 +145,7 @@ export default function ProfilePage() {
               </Text>
             </VStack>
           </HStack>
-          <IconButton
-            icon={<Bell size={20} />}
-            variant="ghost"
-            aria-label="Notifications"
-          />
+          <NotificationBell count={0} size={20} />
         </HStack>
 
         <Tabs colorScheme="brand" mb={6}>

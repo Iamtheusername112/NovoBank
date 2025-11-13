@@ -70,13 +70,21 @@ export default function BottomNavigation({ unreadCount = 0 }) {
                   <Badge
                     colorScheme="red"
                     borderRadius="full"
-                    p="0"
-                    minW="10px"
-                    h="10px"
+                    fontSize="2xs"
+                    fontWeight="bold"
+                    minW="16px"
+                    h="16px"
                     position="absolute"
-                    top="-2px"
-                    right="-2px"
-                  />
+                    top="-4px"
+                    right="-4px"
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                    px={1}
+                    boxShadow="0 2px 4px rgba(0,0,0,0.2)"
+                  >
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Badge>
                 )}
               </Box>
               {active && (

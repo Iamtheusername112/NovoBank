@@ -42,7 +42,6 @@ import {
   ArrowLeft,
   ArrowUpRight,
   ArrowDownRight,
-  Bell,
   Settings,
   Upload,
   Camera,
@@ -65,6 +64,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, 
 import { supabase } from '@/lib/supabase';
 import StatusBar from '@/components/StatusBar';
 import BottomNavigation from '@/components/BottomNavigation';
+import NotificationBell from '@/components/NotificationBell';
 
 const COLORS = ['#9c27b0', '#ec4899', '#f97316', '#ef4444', '#10b981', '#3b82f6'];
 
@@ -440,31 +440,7 @@ function WalletPage() {
             </VStack>
           </HStack>
           <HStack spacing={2}>
-            <IconButton
-              icon={<Bell size={20} />}
-              variant="ghost"
-              aria-label="Notifications"
-              position="relative"
-              onClick={() => router.push('/notifications')}
-            >
-              {unreadCount > 0 && (
-                <Badge
-                  position="absolute"
-                  top="4px"
-                  right="4px"
-                  colorScheme="red"
-                  borderRadius="full"
-                  fontSize="xs"
-                  minW="18px"
-                  h="18px"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                >
-                  {unreadCount}
-                </Badge>
-              )}
-            </IconButton>
+            <NotificationBell count={unreadCount} size={20} />
             <IconButton
               icon={<Settings size={20} />}
               variant="ghost"
@@ -971,26 +947,7 @@ function WalletPage() {
           >
             New Transfer
           </Button>
-          <Box position="relative">
-            <IconButton
-              icon={<Bell size={22} />}
-              aria-label="Notifications"
-              variant="ghost"
-              onClick={() => router.push('/notifications')}
-            />
-            {unreadCount > 0 && (
-              <Badge
-                colorScheme="red"
-                borderRadius="full"
-                position="absolute"
-                top="-2px"
-                right="-2px"
-                p="0"
-                minW="10px"
-                h="10px"
-              />
-            )}
-          </Box>
+          <NotificationBell count={unreadCount} size={22} />
           <Avatar
             size="sm"
             src={profile?.profile_image_url}
