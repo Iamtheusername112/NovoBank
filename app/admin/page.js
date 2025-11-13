@@ -839,7 +839,7 @@ const AdminDashboardComponent = () => {
     return null;
   }
 
-  if (checkingAuth) {
+  if (checkingAuth || !authorized) {
     return (
       <Flex minH="100vh" align="center" justify="center" bg="gray.50">
         <Spinner size="lg" color="purple.500" />
@@ -2179,7 +2179,6 @@ const AdminDashboardComponent = () => {
 const AdminDashboard = dynamic(() => Promise.resolve(AdminDashboardComponent), {
   ssr: false,
   loading: () => null,
-  suspense: false,
 });
 
 export default AdminDashboard;
