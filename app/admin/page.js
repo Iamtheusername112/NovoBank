@@ -49,6 +49,7 @@ import {
   ModalFooter,
   ModalCloseButton,
   CloseButton,
+  useToast,
 } from '@chakra-ui/react';
 import {
   Users,
@@ -154,6 +155,7 @@ const getDefaultTransactionForm = () => ({
 
 const AdminDashboardComponent = () => {
   const router = useRouter();
+  const toast = useToast();
 
   const [mounted, setMounted] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -213,6 +215,10 @@ const AdminDashboardComponent = () => {
     },
     [setAuthError, setAuthorized]
   );
+
+  const showInlineNotification = useCallback((status, title, description) => {
+    setInlineNotification({ status, title, description });
+  }, []);
 
   const fetchAdminData = useCallback(async () => {
     setLoading(true);
@@ -302,10 +308,6 @@ const AdminDashboardComponent = () => {
     setMounted(true);
   }, []);
 
-  if (!mounted) {
-    return null;
-  }
-
   const stats = data?.stats ?? {
     totalUsers: 0,
     newUsers24h: 0,
@@ -373,10 +375,6 @@ const AdminDashboardComponent = () => {
   const pendingReviewCount = pendingReviews.length;
   const blockedAccounts = data?.blockedAccounts ?? [];
   const blockedAccountCount = blockedAccounts.length;
-
-  const showInlineNotification = useCallback((status, title, description) => {
-    setInlineNotification({ status, title, description });
-  }, []);
 
   const dismissInlineNotification = useCallback(() => {
     setInlineNotification(null);
@@ -462,7 +460,7 @@ const AdminDashboardComponent = () => {
         });
       }
     },
-    [authorizedFetch, fetchAdminData, toast]
+    [authorizedFetch, fetchAdminData, showInlineNotification]
   );
 
   const handleReviewAction = (transaction, action, existingNotes = '') => {
@@ -531,7 +529,7 @@ const AdminDashboardComponent = () => {
         });
       }
     },
-    [authorizedFetch, fetchAdminData, toast]
+    [authorizedFetch, fetchAdminData, showInlineNotification]
   );
 
   const handleMarkContactRead = useCallback(
@@ -835,6 +833,11 @@ const AdminDashboardComponent = () => {
     setAvailableAccounts([]);
     setFetchingAccounts(false);
   };
+
+  // Prevent hydration mismatch - check mounted before rendering Chakra UI components
+  if (!mounted) {
+    return null;
+  }
 
   if (checkingAuth) {
     return (

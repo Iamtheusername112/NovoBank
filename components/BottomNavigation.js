@@ -1,11 +1,10 @@
 'use client';
 
-import { Box, Flex, IconButton, Text, Badge } from '@chakra-ui/react';
-import { Wallet, Star, BarChart3, User, Bell, Building2 } from 'lucide-react';
+import { Box, Flex, IconButton, Text } from '@chakra-ui/react';
+import { Wallet, Star, BarChart3, User, Building2 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useMemo } from 'react';
 
-export default function BottomNavigation({ unreadCount = 0 }) {
+export default function BottomNavigation() {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -14,7 +13,6 @@ export default function BottomNavigation({ unreadCount = 0 }) {
     { icon: Building2, label: 'Accounts', path: '/accounts' },
     { icon: Star, label: 'Favorites', path: '/favorites' },
     { icon: BarChart3, label: 'Statistic', path: '/statistics' },
-    { icon: Bell, label: 'Notifications', path: '/notifications' },
     { icon: User, label: 'Profile', path: '/profile' },
   ];
 
@@ -43,9 +41,6 @@ export default function BottomNavigation({ unreadCount = 0 }) {
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.path);
-          const numericCount = Number(unreadCount) || 0;
-          const showBadge =
-            item.path === '/notifications' && numericCount > 0;
           return (
             <Flex
               key={item.path}
@@ -56,38 +51,16 @@ export default function BottomNavigation({ unreadCount = 0 }) {
               onClick={() => router.push(item.path)}
               flex={1}
             >
-              <Box position="relative">
-                <IconButton
-                  icon={<Icon size={20} />}
-                  variant="ghost"
-                  size="sm"
-                  colorScheme={active ? 'brand' : 'gray'}
-                  color={active ? 'brand.600' : 'gray.500'}
-                  bg={active ? 'brand.50' : 'transparent'}
-                  borderRadius="full"
-                  aria-label={item.label}
-                />
-                {showBadge && (
-                  <Badge
-                    colorScheme="red"
-                    borderRadius="full"
-                    fontSize="2xs"
-                    fontWeight="bold"
-                    minW="16px"
-                    h="16px"
-                    position="absolute"
-                    top="-4px"
-                    right="-4px"
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    px={1}
-                    boxShadow="0 2px 4px rgba(0,0,0,0.2)"
-                  >
-                    {numericCount > 99 ? '99+' : numericCount}
-                  </Badge>
-                )}
-              </Box>
+              <IconButton
+                icon={<Icon size={20} />}
+                variant="ghost"
+                size="sm"
+                colorScheme={active ? 'brand' : 'gray'}
+                color={active ? 'brand.600' : 'gray.500'}
+                bg={active ? 'brand.50' : 'transparent'}
+                borderRadius="full"
+                aria-label={item.label}
+              />
               {active && (
                 <Text fontSize="xs" color="brand.600" fontWeight="medium">
                   {item.label}

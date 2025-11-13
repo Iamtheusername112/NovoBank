@@ -191,26 +191,40 @@ export default function CardsPage() {
               icon={<ArrowLeft size={16} style={{ transform: 'rotate(180deg)' }} />}
               variant="ghost"
               size="sm"
-              aria-label="See more"
+              aria-label="See more recipients"
+              onClick={() => router.push('/send-money')}
             />
           </Flex>
-          <HStack spacing={4} overflowX="auto" pb={2}>
+          <HStack spacing={4} overflowX="auto" pb={2} css={{ '&::-webkit-scrollbar': { display: 'none' }, scrollbarWidth: 'none' }}>
             {['Ethan', 'Ann', 'Daniel', 'Jack'].map((name) => (
-              <VStack key={name} spacing={2} minW="60px">
+              <VStack 
+                key={name} 
+                spacing={2} 
+                minW="70px"
+                flexShrink={0}
+                align="center"
+              >
                 <Box
-                  w="50px"
-                  h="50px"
+                  w="56px"
+                  h="56px"
                   borderRadius="full"
                   bg="gray.300"
                   display="flex"
                   alignItems="center"
                   justifyContent="center"
+                  flexShrink={0}
                 >
-                  <Text fontSize="sm" fontWeight="bold">
+                  <Text fontSize="md" fontWeight="bold">
                     {name[0]}
                   </Text>
                 </Box>
-                <Text fontSize="xs" color="gray.600">
+                <Text 
+                  fontSize="xs" 
+                  color="gray.600"
+                  textAlign="center"
+                  noOfLines={1}
+                  maxW="70px"
+                >
                   {name}
                 </Text>
               </VStack>
