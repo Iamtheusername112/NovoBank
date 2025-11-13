@@ -38,11 +38,13 @@ import {
   CreditCard,
   Building2,
   CheckCircle,
+  MessageCircle,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import StatusBar from '@/components/StatusBar';
 import BottomNavigation from '@/components/BottomNavigation';
+import ContactUsModal from '@/components/ContactUsModal';
 
 export default function DepositPage() {
   const router = useRouter();
@@ -55,12 +57,15 @@ export default function DepositPage() {
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
   const { isOpen: isDepositOpen, onOpen: onDepositOpen, onClose: onDepositClose } = useDisclosure();
+  const { isOpen: isContactOpen, onOpen: onContactOpen, onClose: onContactClose } = useDisclosure();
   const [depositAmount, setDepositAmount] = useState('');
   const [selectedAccount, setSelectedAccount] = useState('');
   const [depositMethod, setDepositMethod] = useState('check');
   const [checkImage, setCheckImage] = useState(null);
   const [accountStatus, setAccountStatus] = useState('active');
   const [accountStatusReason, setAccountStatusReason] = useState('');
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [unreadAlertCount, setUnreadAlertCount] = useState(0);
 
   useEffect(() => {
     setMounted(true);
@@ -105,6 +110,21 @@ export default function DepositPage() {
         const primary = accountsData.find(a => a.is_primary) || accountsData[0];
         setSelectedAccount(primary.id);
       }
+
+      // Load notification counts
+      const { data: notificationsData } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setUnreadNotificationCount((notificationsData || []).length);
+
+      const { data: alertsData } = await supabase
+        .from('alerts')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setUnreadAlertCount((alertsData || []).length);
 
     } catch (error) {
       console.error('Error loading accounts:', error);
@@ -321,6 +341,13 @@ export default function DepositPage() {
               Deposit Money
             </Text>
           </HStack>
+          <IconButton
+            icon={<MessageCircle size={20} />}
+            variant="ghost"
+            colorScheme="purple"
+            aria-label="Contact Us"
+            onClick={onContactOpen}
+          />
         </Flex>
       </Box>
 
@@ -575,7 +602,8 @@ export default function DepositPage() {
         </ModalContent>
       </Modal>
 
-      <BottomNavigation />
+      <BottomNavigation unreadCount={unreadNotificationCount + unreadAlertCount} />
+      <ContactUsModal isOpen={isContactOpen} onClose={onContactClose} />
     </Box>
   );
 }

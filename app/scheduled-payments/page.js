@@ -38,11 +38,13 @@ import {
   Trash2,
   Plus,
   Repeat,
+  MessageCircle,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import StatusBar from '@/components/StatusBar';
 import BottomNavigation from '@/components/BottomNavigation';
+import ContactUsModal from '@/components/ContactUsModal';
 
 export default function ScheduledPaymentsPage() {
   const router = useRouter();
@@ -53,7 +55,10 @@ export default function ScheduledPaymentsPage() {
   const [scheduledPayments, setScheduledPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [unreadAlertCount, setUnreadAlertCount] = useState(0);
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
+  const { isOpen: isContactOpen, onOpen: onContactOpen, onClose: onContactClose } = useDisclosure();
   const [selectedPayment, setSelectedPayment] = useState(null);
 
   useEffect(() => {
@@ -79,6 +84,21 @@ export default function ScheduledPaymentsPage() {
 
       if (error) throw error;
       setScheduledPayments(paymentsData || []);
+
+      // Load notification counts
+      const { data: notificationsData } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setUnreadNotificationCount((notificationsData || []).length);
+
+      const { data: alertsData } = await supabase
+        .from('alerts')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setUnreadAlertCount((alertsData || []).length);
 
     } catch (error) {
       console.error('Error loading scheduled payments:', error);
@@ -226,14 +246,23 @@ export default function ScheduledPaymentsPage() {
               Scheduled Payments
             </Text>
           </HStack>
-          <Button
-            leftIcon={<Plus size={16} />}
-            colorScheme="purple"
-            size="sm"
-            onClick={() => router.push('/send-money?schedule=true')}
-          >
-            Schedule Payment
-          </Button>
+          <HStack spacing={2}>
+            <IconButton
+              icon={<MessageCircle size={20} />}
+              variant="ghost"
+              colorScheme="purple"
+              aria-label="Contact Us"
+              onClick={onContactOpen}
+            />
+            <Button
+              leftIcon={<Plus size={16} />}
+              colorScheme="purple"
+              size="sm"
+              onClick={() => router.push('/send-money?schedule=true')}
+            >
+              Schedule Payment
+            </Button>
+          </HStack>
         </Flex>
       </Box>
 
@@ -461,7 +490,8 @@ export default function ScheduledPaymentsPage() {
         </ModalContent>
       </Modal>
 
-      <BottomNavigation />
+      <BottomNavigation unreadCount={unreadNotificationCount + unreadAlertCount} />
+      <ContactUsModal isOpen={isContactOpen} onClose={onContactClose} />
     </Box>
   );
 }

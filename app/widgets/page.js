@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import {
   Box,
   Flex,
@@ -11,12 +12,15 @@ import {
   Card,
   CardBody,
   useColorModeValue,
+  useDisclosure,
 } from '@chakra-ui/react';
-import { Grid, ArrowLeft } from 'lucide-react';
+import { Grid, ArrowLeft, MessageCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis } from 'recharts';
 import StatusBar from '@/components/StatusBar';
 import BottomNavigation from '@/components/BottomNavigation';
+import ContactUsModal from '@/components/ContactUsModal';
 
 const pieData = [
   { name: 'Food', value: 150, color: '#ef4444' },
@@ -35,6 +39,36 @@ const barData = [
 export default function WidgetsPage() {
   const router = useRouter();
   const cardBg = useColorModeValue('white', 'gray.800');
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [unreadAlertCount, setUnreadAlertCount] = useState(0);
+  const { isOpen: isContactOpen, onOpen: onContactOpen, onClose: onContactClose } = useDisclosure();
+
+  useEffect(() => {
+    loadNotificationCounts();
+  }, []);
+
+  const loadNotificationCounts = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: notificationsData } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setUnreadNotificationCount((notificationsData || []).length);
+
+      const { data: alertsData } = await supabase
+        .from('alerts')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setUnreadAlertCount((alertsData || []).length);
+    } catch (error) {
+      console.error('Error loading notification counts:', error);
+    }
+  };
 
   return (
     <Box minH="100vh" bg="gray.50" pb="80px">
@@ -52,13 +86,22 @@ export default function WidgetsPage() {
               Widgets
             </Text>
           </HStack>
-          <IconButton
-            icon={<Grid size={20} />}
-            variant="ghost"
-            bg="brand.600"
-            color="white"
-            aria-label="Grid"
-          />
+          <HStack spacing={2}>
+            <IconButton
+              icon={<MessageCircle size={20} />}
+              variant="ghost"
+              colorScheme="purple"
+              aria-label="Contact Us"
+              onClick={onContactOpen}
+            />
+            <IconButton
+              icon={<Grid size={20} />}
+              variant="ghost"
+              bg="brand.600"
+              color="white"
+              aria-label="Grid"
+            />
+          </HStack>
         </Flex>
 
         <VStack spacing={4} align="stretch" mb={6}>
@@ -181,7 +224,8 @@ export default function WidgetsPage() {
           </Button>
         </VStack>
       </Box>
-      <BottomNavigation />
+      <BottomNavigation unreadCount={unreadNotificationCount + unreadAlertCount} />
+      <ContactUsModal isOpen={isContactOpen} onClose={onContactClose} />
     </Box>
   );
 }

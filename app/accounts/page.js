@@ -47,11 +47,13 @@ import {
   TrendingUp,
   PiggyBank,
   Trash2,
+  MessageCircle,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import StatusBar from '@/components/StatusBar';
 import BottomNavigation from '@/components/BottomNavigation';
+import ContactUsModal from '@/components/ContactUsModal';
 
 const CURRENCIES = [
   { code: 'USD', symbol: '$', name: 'US Dollar' },
@@ -154,6 +156,7 @@ function AccountsPageComponent() {
     onOpen: onLinkOpen,
     onClose: onLinkClose,
   } = useDisclosure();
+  const { isOpen: isContactOpen, onOpen: onContactOpen, onClose: onContactClose } = useDisclosure();
   const [bankSearch, setBankSearch] = useState('');
   const [selectedBank, setSelectedBank] = useState('');
   const [linkingAccount, setLinkingAccount] = useState(false);
@@ -626,9 +629,18 @@ function AccountsPageComponent() {
               My Accounts
             </Text>
           </HStack>
-          <Button colorScheme="purple" onClick={handleOpenLinkModal}>
-            Link Bank Account
-          </Button>
+          <HStack spacing={2}>
+            <IconButton
+              icon={<MessageCircle size={20} />}
+              variant="ghost"
+              colorScheme="purple"
+              aria-label="Contact Us"
+              onClick={onContactOpen}
+            />
+            <Button colorScheme="purple" size="sm" onClick={handleOpenLinkModal}>
+              Link Bank Account
+            </Button>
+          </HStack>
         </Flex>
       </Box>
 
@@ -1019,6 +1031,7 @@ function AccountsPageComponent() {
       </Modal>
 
       <BottomNavigation unreadCount={unreadCount} />
+      <ContactUsModal isOpen={isContactOpen} onClose={onContactClose} />
     </Box>
   );
 }

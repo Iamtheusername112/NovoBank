@@ -91,6 +91,8 @@ export async function GET(request) {
       transactionsResult,
       todayTransactionsResult,
       blockedAccountsResult,
+      contactSubmissionsResult,
+      adminNotificationsResult,
     ] = await Promise.all([
       supabaseAdmin
         .from('user_profiles')
@@ -116,6 +118,14 @@ export async function GET(request) {
         .from('user_profiles')
         .select('id, first_name, last_name, email, account_status, account_status_reason, account_status_updated_at')
         .eq('account_status', 'blocked'),
+      supabaseAdmin
+        .from('contact_submissions')
+        .select('id, name, email, message, status, admin_response, responded_by, responded_at, created_at, updated_at')
+        .order('created_at', { ascending: false }),
+      supabaseAdmin
+        .from('admin_notifications')
+        .select('id, notification_type, reference_id, title, message, is_read, created_at')
+        .order('created_at', { ascending: false }),
     ]);
 
     // Handle potential errors
@@ -125,6 +135,8 @@ export async function GET(request) {
     if (transactionsResult.error) throw transactionsResult.error;
     if (todayTransactionsResult.error) throw todayTransactionsResult.error;
     if (blockedAccountsResult.error) throw blockedAccountsResult.error;
+    if (contactSubmissionsResult.error) throw contactSubmissionsResult.error;
+    if (adminNotificationsResult.error) throw adminNotificationsResult.error;
 
     const accountsStats = accountsStatsResult.data || [];
     const usersData = [...(usersResult.data || [])];
@@ -132,6 +144,8 @@ export async function GET(request) {
     const topAccountsData = topAccountsResult.data || [];
     const todayTransactions = todayTransactionsResult.data || [];
     const blockedAccounts = blockedAccountsResult.data || [];
+    const contactSubmissions = contactSubmissionsResult.data || [];
+    const adminNotifications = adminNotificationsResult.data || [];
 
     const accountAggregation = accountsStats.reduce((acc, account) => {
       const userId = account.user_id;
@@ -232,6 +246,9 @@ export async function GET(request) {
       };
     });
 
+    const unreadContacts = contactSubmissions.filter((cs) => cs.status === 'unread').length;
+    const unreadNotifications = adminNotifications.filter((n) => !n.is_read).length;
+
     const stats = {
       totalUsers: totalUsers || 0,
       newUsers24h: newUsers24h || 0,
@@ -241,6 +258,8 @@ export async function GET(request) {
       flaggedCount: flaggedTransactions.length,
       pendingTransactions: mappedTransactions.filter((tx) => tx.review_status === 'pending').length,
       blockedAccountsCount: blockedAccounts.length,
+      unreadContacts,
+      unreadNotifications,
     };
 
     return NextResponse.json({
@@ -251,6 +270,8 @@ export async function GET(request) {
       pendingReviews: mappedTransactions.filter((tx) => tx.review_status === 'pending'),
       accounts: mappedAccounts,
       blockedAccounts,
+      contactSubmissions,
+      adminNotifications,
     });
   } catch (error) {
     console.error('Admin overview error:', error);

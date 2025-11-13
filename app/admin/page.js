@@ -62,6 +62,8 @@ import {
   Clock,
   Building2,
   ArrowRightLeft,
+  Bell,
+  Mail,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -179,6 +181,9 @@ const AdminDashboardComponent = () => {
   const [reviewNotesInput, setReviewNotesInput] = useState('');
   const [accountStatusLoading, setAccountStatusLoading] = useState({});
   const [inlineNotification, setInlineNotification] = useState(null);
+  const [contactResponseModal, setContactResponseModal] = useState({ isOpen: false, contact: null });
+  const [contactResponseText, setContactResponseText] = useState('');
+  const [contactActionLoading, setContactActionLoading] = useState({});
 
   const authorizedFetch = useCallback(
     async (url, init = {}) => {
@@ -310,6 +315,8 @@ const AdminDashboardComponent = () => {
     flaggedCount: 0,
     pendingTransactions: 0,
     blockedAccountsCount: 0,
+    unreadContacts: 0,
+    unreadNotifications: 0,
   };
 
   const transactionTrendData = useMemo(() => {
@@ -525,6 +532,91 @@ const AdminDashboardComponent = () => {
       }
     },
     [authorizedFetch, fetchAdminData, toast]
+  );
+
+  const handleMarkContactRead = useCallback(
+    async (contactId) => {
+      setContactActionLoading((prev) => ({ ...prev, [contactId]: 'read' }));
+      try {
+        const response = await authorizedFetch('/api/admin/contacts', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            contact_id: contactId,
+            status: 'read',
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Unable to mark contact as read.');
+        }
+
+        showInlineNotification('success', 'Contact marked as read', '');
+        await fetchAdminData();
+      } catch (err) {
+        console.error('Mark contact read error:', err);
+        showInlineNotification('error', 'Action failed', err.message || 'Could not mark contact as read.');
+      } finally {
+        setContactActionLoading((prev) => {
+          const next = { ...prev };
+          delete next[contactId];
+          return next;
+        });
+      }
+    },
+    [authorizedFetch, fetchAdminData, showInlineNotification]
+  );
+
+  const handleOpenResponseModal = useCallback((contact) => {
+    setContactResponseText(contact.admin_response || '');
+    setContactResponseModal({ isOpen: true, contact });
+  }, []);
+
+  const handleCloseResponseModal = useCallback(() => {
+    if (contactResponseModal.contact) {
+      const loadingAction = contactActionLoading[contactResponseModal.contact.id];
+      if (loadingAction) {
+        return;
+      }
+    }
+    setContactResponseModal({ isOpen: false, contact: null });
+    setContactResponseText('');
+  }, [contactResponseModal, contactActionLoading]);
+
+  const handleSubmitResponse = useCallback(
+    async () => {
+      if (!contactResponseModal.contact) return;
+
+      const contactId = contactResponseModal.contact.id;
+      setContactActionLoading((prev) => ({ ...prev, [contactId]: 'respond' }));
+
+      try {
+        const response = await authorizedFetch('/api/admin/contacts', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            contact_id: contactId,
+            admin_response: contactResponseText.trim(),
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Unable to submit response.');
+        }
+
+        showInlineNotification('success', 'Response submitted', '');
+        handleCloseResponseModal();
+        await fetchAdminData();
+      } catch (err) {
+        console.error('Submit response error:', err);
+        showInlineNotification('error', 'Action failed', err.message || 'Could not submit response.');
+      } finally {
+        setContactActionLoading((prev) => {
+          const next = { ...prev };
+          delete next[contactId];
+          return next;
+        });
+      }
+    },
+    [contactResponseModal, contactResponseText, authorizedFetch, fetchAdminData, handleCloseResponseModal, showInlineNotification]
   );
 
   const loadUserAccounts = useCallback(
@@ -791,6 +883,41 @@ const AdminDashboardComponent = () => {
             )}
           </VStack>
           <HStack spacing={3}>
+            {stats.unreadNotifications > 0 && (
+              <Box position="relative">
+                <Button
+                  variant="outline"
+                  leftIcon={<Bell size={16} />}
+                  onClick={() => {
+                    // Scroll to notifications or open notifications panel
+                    const tabs = document.querySelector('[role="tablist"]');
+                    if (tabs) {
+                      const contactTab = Array.from(tabs.children).find((tab) => 
+                        tab.textContent?.includes('Contact Submissions')
+                      );
+                      if (contactTab) contactTab.click();
+                    }
+                  }}
+                >
+                  Notifications
+                </Button>
+                <Badge
+                  position="absolute"
+                  top="-8px"
+                  right="-8px"
+                  colorScheme="red"
+                  borderRadius="full"
+                  fontSize="xs"
+                  minW="20px"
+                  h="20px"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  {stats.unreadNotifications}
+                </Badge>
+              </Box>
+            )}
             <ChakraTooltip label="Refresh metrics from Supabase">
               <Button
                 variant="outline"
@@ -1438,6 +1565,199 @@ const AdminDashboardComponent = () => {
                 </Card>
               </Stack>
             </TabPanel>
+            <TabPanel px={0} pt={6}>
+              <Stack spacing={4}>
+                <Flex
+                  direction={{ base: 'column', md: 'row' }}
+                  justify="space-between"
+                  align={{ base: 'stretch', md: 'center' }}
+                  gap={4}
+                >
+                  <Text fontSize="lg" fontWeight="semibold" color="gray.800">
+                    Contact Submissions ({data?.contactSubmissions?.length || 0})
+                  </Text>
+                  <HStack spacing={2}>
+                    <Badge colorScheme="red" fontSize="sm">
+                      {stats.unreadContacts} Unread
+                    </Badge>
+                  </HStack>
+                </Flex>
+
+                {data?.contactSubmissions && data.contactSubmissions.length > 0 ? (
+                  <>
+                    {/* Desktop Table View */}
+                    <Box display={{ base: 'none', md: 'block' }}>
+                      <Card bg="white" borderRadius="xl" boxShadow="sm" overflowX="auto">
+                        <Table variant="simple">
+                          <Thead>
+                            <Tr>
+                              <Th>Name</Th>
+                              <Th>Email</Th>
+                              <Th>Message</Th>
+                              <Th>Status</Th>
+                              <Th>Date</Th>
+                              <Th>Actions</Th>
+                            </Tr>
+                          </Thead>
+                          <Tbody>
+                            {data.contactSubmissions.map((contact) => (
+                              <Tr
+                                key={contact.id}
+                                bg={contact.status === 'unread' ? 'purple.50' : 'white'}
+                                _hover={{ bg: 'gray.50' }}
+                              >
+                                <Td fontWeight="medium">{contact.name}</Td>
+                                <Td>{contact.email}</Td>
+                                <Td maxW="300px">
+                                  <Text fontSize="sm" noOfLines={2}>
+                                    {contact.message}
+                                  </Text>
+                                </Td>
+                                <Td>
+                                  <Badge
+                                    colorScheme={
+                                      contact.status === 'unread'
+                                        ? 'red'
+                                        : contact.status === 'responded'
+                                        ? 'green'
+                                        : 'gray'
+                                    }
+                                  >
+                                    {contact.status}
+                                  </Badge>
+                                </Td>
+                                <Td fontSize="sm">{formatDate(contact.created_at)}</Td>
+                                <Td>
+                                  <HStack spacing={2}>
+                                    {contact.status === 'unread' && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        colorScheme="purple"
+                                        onClick={() => handleMarkContactRead(contact.id)}
+                                        isLoading={contactActionLoading[contact.id] === 'read'}
+                                      >
+                                        Mark Read
+                                      </Button>
+                                    )}
+                                    <Button
+                                      size="sm"
+                                      colorScheme="purple"
+                                      onClick={() => handleOpenResponseModal(contact)}
+                                      isLoading={contactActionLoading[contact.id] === 'respond'}
+                                    >
+                                      {contact.admin_response ? 'View Response' : 'Respond'}
+                                    </Button>
+                                  </HStack>
+                                </Td>
+                              </Tr>
+                            ))}
+                          </Tbody>
+                        </Table>
+                      </Card>
+                    </Box>
+
+                    {/* Mobile Card View */}
+                    <Box display={{ base: 'block', md: 'none' }}>
+                      <VStack spacing={4} align="stretch">
+                        {data.contactSubmissions.map((contact) => (
+                          <Card
+                            key={contact.id}
+                            bg={contact.status === 'unread' ? 'purple.50' : 'white'}
+                            borderRadius="xl"
+                            boxShadow="sm"
+                            borderLeft="4px solid"
+                            borderLeftColor={
+                              contact.status === 'unread'
+                                ? 'red.500'
+                                : contact.status === 'responded'
+                                ? 'green.500'
+                                : 'gray.300'
+                            }
+                          >
+                            <CardBody>
+                              <VStack spacing={3} align="stretch">
+                                <Flex justify="space-between" align="start" flexWrap="wrap" gap={2}>
+                                  <VStack align="flex-start" spacing={1} flex={1}>
+                                    <Text fontWeight="bold" fontSize="md" color="gray.800">
+                                      {contact.name}
+                                    </Text>
+                                    <Text fontSize="sm" color="gray.600" wordBreak="break-all">
+                                      {contact.email}
+                                    </Text>
+                                  </VStack>
+                                  <Badge
+                                    colorScheme={
+                                      contact.status === 'unread'
+                                        ? 'red'
+                                        : contact.status === 'responded'
+                                        ? 'green'
+                                        : 'gray'
+                                    }
+                                    fontSize="xs"
+                                    textTransform="capitalize"
+                                  >
+                                    {contact.status}
+                                  </Badge>
+                                </Flex>
+
+                                <Box>
+                                  <Text fontSize="xs" color="gray.500" mb={1}>
+                                    Message:
+                                  </Text>
+                                  <Text fontSize="sm" color="gray.700" noOfLines={3}>
+                                    {contact.message}
+                                  </Text>
+                                </Box>
+
+                                <Text fontSize="xs" color="gray.500">
+                                  {formatDate(contact.created_at)}
+                                </Text>
+
+                                <Divider />
+
+                                <VStack spacing={2} align="stretch">
+                                  {contact.status === 'unread' && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      colorScheme="purple"
+                                      onClick={() => handleMarkContactRead(contact.id)}
+                                      isLoading={contactActionLoading[contact.id] === 'read'}
+                                      width="full"
+                                    >
+                                      Mark Read
+                                    </Button>
+                                  )}
+                                  <Button
+                                    size="sm"
+                                    colorScheme="purple"
+                                    onClick={() => handleOpenResponseModal(contact)}
+                                    isLoading={contactActionLoading[contact.id] === 'respond'}
+                                    width="full"
+                                  >
+                                    {contact.admin_response ? 'View Response' : 'Respond'}
+                                  </Button>
+                                </VStack>
+                              </VStack>
+                            </CardBody>
+                          </Card>
+                        ))}
+                      </VStack>
+                    </Box>
+                  </>
+                ) : (
+                  <Card bg="white" borderRadius="xl" boxShadow="sm">
+                    <CardBody>
+                      <VStack spacing={4} py={8}>
+                        <Mail size={48} color="#9ca3af" />
+                        <Text color="gray.600">No contact submissions yet</Text>
+                      </VStack>
+                    </CardBody>
+                  </Card>
+                )}
+              </Stack>
+            </TabPanel>
           </TabPanels>
         </Tabs>
       </Box>
@@ -1751,6 +2071,87 @@ const AdminDashboardComponent = () => {
             >
               {reviewModalState.action}
             </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Contact Response Modal */}
+      <Modal isOpen={contactResponseModal.isOpen} onClose={handleCloseResponseModal} size="lg">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>
+            {contactResponseModal.contact?.admin_response ? 'View Response' : 'Respond to Contact'}
+          </ModalHeader>
+          <ModalCloseButton isDisabled={contactActionLoading[contactResponseModal.contact?.id]} />
+          <ModalBody>
+            {contactResponseModal.contact && (
+              <VStack spacing={4} align="stretch">
+                <Box p={4} bg="gray.50" borderRadius="md">
+                  <Text fontSize="sm" fontWeight="semibold" color="gray.700" mb={2}>
+                    From: {contactResponseModal.contact.name} ({contactResponseModal.contact.email})
+                  </Text>
+                  <Text fontSize="sm" color="gray.600" mb={2}>
+                    Date: {formatDate(contactResponseModal.contact.created_at)}
+                  </Text>
+                  <Text fontSize="sm" color="gray.800" whiteSpace="pre-wrap">
+                    {contactResponseModal.contact.message}
+                  </Text>
+                </Box>
+
+                {contactResponseModal.contact.admin_response && (
+                  <Box p={4} bg="green.50" borderRadius="md" border="1px solid" borderColor="green.200">
+                    <Text fontSize="sm" fontWeight="semibold" color="green.700" mb={2}>
+                      Your Response:
+                    </Text>
+                    <Text fontSize="sm" color="green.800" whiteSpace="pre-wrap">
+                      {contactResponseModal.contact.admin_response}
+                    </Text>
+                    {contactResponseModal.contact.responded_at && (
+                      <Text fontSize="xs" color="green.600" mt={2}>
+                        Responded: {formatDate(contactResponseModal.contact.responded_at)}
+                      </Text>
+                    )}
+                  </Box>
+                )}
+
+                {!contactResponseModal.contact.admin_response && (
+                  <FormControl>
+                    <FormLabel>Your Response</FormLabel>
+                    <Textarea
+                      placeholder="Type your response here..."
+                      value={contactResponseText}
+                      onChange={(e) => setContactResponseText(e.target.value)}
+                      rows={6}
+                      resize="vertical"
+                      isDisabled={contactActionLoading[contactResponseModal.contact.id]}
+                    />
+                    <FormHelperText>
+                      This response will be saved and can be viewed later.
+                    </FormHelperText>
+                  </FormControl>
+                )}
+              </VStack>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="ghost"
+              mr={3}
+              onClick={handleCloseResponseModal}
+              isDisabled={contactActionLoading[contactResponseModal.contact?.id]}
+            >
+              {contactResponseModal.contact?.admin_response ? 'Close' : 'Cancel'}
+            </Button>
+            {!contactResponseModal.contact?.admin_response && (
+              <Button
+                colorScheme="purple"
+                onClick={handleSubmitResponse}
+                isLoading={contactActionLoading[contactResponseModal.contact?.id]}
+                isDisabled={!contactResponseText.trim()}
+              >
+                Submit Response
+              </Button>
+            )}
           </ModalFooter>
         </ModalContent>
       </Modal>

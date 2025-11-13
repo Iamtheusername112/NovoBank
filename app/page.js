@@ -27,7 +27,8 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { useToast } from '@chakra-ui/react';
+import { useToast, useDisclosure } from '@chakra-ui/react';
+import ContactUsModal from '@/components/ContactUsModal';
 
 const features = [
   {
@@ -81,6 +82,7 @@ export default function LandingPage() {
   const router = useRouter();
   const toast = useToast();
   const [mounted, setMounted] = useState(false);
+  const { isOpen: isContactOpen, onOpen: onContactOpen, onClose: onContactClose } = useDisclosure();
   const bgGradient = useColorModeValue(
     'linear(to-br, purple.50, pink.50, blue.50)',
     'linear(to-br, gray.900, purple.900)'
@@ -457,10 +459,23 @@ export default function LandingPage() {
               <Text fontSize="sm" cursor="pointer" _hover={{ color: 'white' }}>
                 Support
               </Text>
+              <Button
+                size="sm"
+                colorScheme="purple"
+                variant="outline"
+                borderColor="purple.400"
+                color="purple.300"
+                _hover={{ bg: 'purple.600', color: 'white' }}
+                onClick={onContactOpen}
+              >
+                Contact Us
+              </Button>
             </HStack>
           </Flex>
         </Container>
       </Box>
+
+      <ContactUsModal isOpen={isContactOpen} onClose={onContactClose} />
     </Box>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Flex,
@@ -13,12 +13,15 @@ import {
   CardBody,
   Badge,
   useColorModeValue,
+  useDisclosure,
 } from '@chakra-ui/react';
-import { Grid, ArrowLeft } from 'lucide-react';
+import { Grid, ArrowLeft, MessageCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from 'recharts';
 import StatusBar from '@/components/StatusBar';
 import BottomNavigation from '@/components/BottomNavigation';
+import ContactUsModal from '@/components/ContactUsModal';
 
 const spendingData = [
   { name: 'Shopping', value: 233, color: '#9c27b0' },
@@ -52,8 +55,38 @@ const transactions = [
 
 export default function StatisticsPage() {
   const [timePeriod, setTimePeriod] = useState('week');
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [unreadAlertCount, setUnreadAlertCount] = useState(0);
   const router = useRouter();
   const cardBg = useColorModeValue('white', 'gray.800');
+  const { isOpen: isContactOpen, onOpen: onContactOpen, onClose: onContactClose } = useDisclosure();
+
+  useEffect(() => {
+    loadNotificationCounts();
+  }, []);
+
+  const loadNotificationCounts = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: notificationsData } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setUnreadNotificationCount((notificationsData || []).length);
+
+      const { data: alertsData } = await supabase
+        .from('alerts')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setUnreadAlertCount((alertsData || []).length);
+    } catch (error) {
+      console.error('Error loading notification counts:', error);
+    }
+  };
 
   return (
     <Box minH="100vh" bg="gray.50" pb="80px">
@@ -63,12 +96,21 @@ export default function StatisticsPage() {
           <Text fontSize="2xl" fontWeight="bold" color="gray.800">
             Statistic
           </Text>
-          <IconButton
-            icon={<Grid size={20} />}
-            variant="ghost"
-            onClick={() => router.push('/widgets')}
-            aria-label="Widgets"
-          />
+          <HStack spacing={2}>
+            <IconButton
+              icon={<MessageCircle size={20} />}
+              variant="ghost"
+              colorScheme="purple"
+              aria-label="Contact Us"
+              onClick={onContactOpen}
+            />
+            <IconButton
+              icon={<Grid size={20} />}
+              variant="ghost"
+              onClick={() => router.push('/widgets')}
+              aria-label="Widgets"
+            />
+          </HStack>
         </Flex>
 
         <HStack spacing={2} mb={6}>
@@ -192,7 +234,8 @@ export default function StatisticsPage() {
           })}
         </VStack>
       </Box>
-      <BottomNavigation />
+      <BottomNavigation unreadCount={unreadNotificationCount + unreadAlertCount} />
+      <ContactUsModal isOpen={isContactOpen} onClose={onContactClose} />
     </Box>
   );
 }

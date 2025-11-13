@@ -23,6 +23,7 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
+  useDisclosure,
 } from '@chakra-ui/react';
 import {
   Bell,
@@ -36,11 +37,13 @@ import {
   TrendingDown,
   Info,
   Filter,
+  MessageCircle,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import StatusBar from '@/components/StatusBar';
 import BottomNavigation from '@/components/BottomNavigation';
+import ContactUsModal from '@/components/ContactUsModal';
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -54,6 +57,7 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const { isOpen: isContactOpen, onOpen: onContactOpen, onClose: onContactClose } = useDisclosure();
 
   useEffect(() => {
     setMounted(true);
@@ -331,22 +335,31 @@ export default function NotificationsPage() {
           <Text fontSize="2xl" fontWeight="bold" color="gray.800">
             Notifications
           </Text>
-          <Menu>
-            <MenuButton
-              as={IconButton}
-              icon={<Filter size={20} />}
+          <HStack spacing={2}>
+            <IconButton
+              icon={<MessageCircle size={20} />}
               variant="ghost"
-              aria-label="Filter"
+              colorScheme="purple"
+              aria-label="Contact Us"
+              onClick={onContactOpen}
             />
-            <MenuList>
-              <MenuItem onClick={() => markAllAsRead('notification')}>
-                Mark all notifications as read
-              </MenuItem>
-              <MenuItem onClick={() => markAllAsRead('alert')}>
-                Mark all alerts as read
-              </MenuItem>
-            </MenuList>
-          </Menu>
+            <Menu>
+              <MenuButton
+                as={IconButton}
+                icon={<Filter size={20} />}
+                variant="ghost"
+                aria-label="Filter"
+              />
+              <MenuList>
+                <MenuItem onClick={() => markAllAsRead('notification')}>
+                  Mark all notifications as read
+                </MenuItem>
+                <MenuItem onClick={() => markAllAsRead('alert')}>
+                  Mark all alerts as read
+                </MenuItem>
+              </MenuList>
+            </Menu>
+          </HStack>
         </Flex>
       </Box>
 
@@ -520,7 +533,8 @@ export default function NotificationsPage() {
         </Tabs>
       </Box>
 
-      <BottomNavigation />
+      <BottomNavigation unreadCount={unreadNotifications + unreadAlerts} />
+      <ContactUsModal isOpen={isContactOpen} onClose={onContactClose} />
     </Box>
   );
 }

@@ -38,11 +38,13 @@ import {
   Plus,
   CreditCard,
   DollarSign,
+  MessageCircle,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import StatusBar from '@/components/StatusBar';
 import BottomNavigation from '@/components/BottomNavigation';
+import ContactUsModal from '@/components/ContactUsModal';
 
 export default function BillsPage() {
   const router = useRouter();
@@ -55,8 +57,11 @@ export default function BillsPage() {
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [unreadAlertCount, setUnreadAlertCount] = useState(0);
   const { isOpen: isPayOpen, onOpen: onPayOpen, onClose: onPayClose } = useDisclosure();
   const { isOpen: isAddOpen, onOpen: onAddOpen, onClose: onAddClose } = useDisclosure();
+  const { isOpen: isContactOpen, onOpen: onContactOpen, onClose: onContactClose } = useDisclosure();
   const [selectedBill, setSelectedBill] = useState(null);
   const [selectedAccount, setSelectedAccount] = useState('');
   const [newBill, setNewBill] = useState({
@@ -115,6 +120,21 @@ export default function BillsPage() {
         .single();
       setAccountStatus(profileData?.account_status || 'active');
       setAccountStatusReason(profileData?.account_status_reason || '');
+
+      // Load notification counts
+      const { data: notificationsData } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setUnreadNotificationCount((notificationsData || []).length);
+
+      const { data: alertsData } = await supabase
+        .from('alerts')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setUnreadAlertCount((alertsData || []).length);
 
     } catch (error) {
       console.error('Error loading bills:', error);
@@ -382,12 +402,21 @@ export default function BillsPage() {
               Pay Bills
             </Text>
           </HStack>
-          <IconButton
-            icon={<Plus size={20} />}
-            variant="ghost"
-            onClick={onAddOpen}
-            aria-label="Add Bill"
-          />
+          <HStack spacing={2}>
+            <IconButton
+              icon={<MessageCircle size={20} />}
+              variant="ghost"
+              colorScheme="purple"
+              aria-label="Contact Us"
+              onClick={onContactOpen}
+            />
+            <IconButton
+              icon={<Plus size={20} />}
+              variant="ghost"
+              onClick={onAddOpen}
+              aria-label="Add Bill"
+            />
+          </HStack>
         </Flex>
       </Box>
 
@@ -659,7 +688,8 @@ export default function BillsPage() {
         </ModalContent>
       </Modal>
 
-      <BottomNavigation />
+      <BottomNavigation unreadCount={unreadNotificationCount + unreadAlertCount} />
+      <ContactUsModal isOpen={isContactOpen} onClose={onContactClose} />
     </Box>
   );
 }

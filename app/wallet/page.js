@@ -58,6 +58,7 @@ import {
   Wallet,
   PiggyBank,
   BarChart3,
+  MessageCircle,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
@@ -65,6 +66,7 @@ import { supabase } from '@/lib/supabase';
 import StatusBar from '@/components/StatusBar';
 import BottomNavigation from '@/components/BottomNavigation';
 import NotificationBell from '@/components/NotificationBell';
+import ContactUsModal from '@/components/ContactUsModal';
 
 const COLORS = ['#9c27b0', '#ec4899', '#f97316', '#ef4444', '#10b981', '#3b82f6'];
 
@@ -76,6 +78,7 @@ function WalletPage() {
   
   const { isOpen: isProfileOpen, onOpen: onProfileOpen, onClose: onProfileClose } = useDisclosure();
   const { isOpen: isTransferOpen, onOpen: onTransferOpen, onClose: onTransferClose } = useDisclosure();
+  const { isOpen: isContactOpen, onOpen: onContactOpen, onClose: onContactClose } = useDisclosure();
   
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -445,6 +448,13 @@ function WalletPage() {
           </HStack>
           <HStack spacing={2}>
             <NotificationBell count={unreadCount} size={20} />
+            <IconButton
+              icon={<MessageCircle size={20} />}
+              variant="ghost"
+              colorScheme="purple"
+              aria-label="Contact Us"
+              onClick={onContactOpen}
+            />
             <IconButton
               icon={<Settings size={20} />}
               variant="ghost"
@@ -1008,6 +1018,9 @@ function WalletPage() {
                 <Button variant="outline" leftIcon={<Settings size={16} />} onClick={() => router.push('/profile')}>
                   Manage Profile
                 </Button>
+                <Button variant="outline" colorScheme="purple" size="sm" onClick={onContactOpen}>
+                  Contact Us
+                </Button>
               </VStack>
             </CardBody>
           </Card>
@@ -1367,6 +1380,7 @@ function WalletPage() {
     <>
       {isDesktop ? desktopLayout : mobileLayout}
       {modals}
+      <ContactUsModal isOpen={isContactOpen} onClose={onContactClose} />
     </>
   );
 }

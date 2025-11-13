@@ -20,6 +20,7 @@ import {
   Button,
   useToast,
   Avatar,
+  useDisclosure,
 } from '@chakra-ui/react';
 import {
   Moon,
@@ -36,6 +37,7 @@ import { supabase } from '@/lib/supabase';
 import StatusBar from '@/components/StatusBar';
 import BottomNavigation from '@/components/BottomNavigation';
 import NotificationBell from '@/components/NotificationBell';
+import ContactUsModal from '@/components/ContactUsModal';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -48,6 +50,7 @@ export default function ProfilePage() {
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [unreadAlertCount, setUnreadAlertCount] = useState(0);
   const cardBg = useColorModeValue('white', 'gray.800');
+  const { isOpen: isContactOpen, onOpen: onContactOpen, onClose: onContactClose } = useDisclosure();
 
   useEffect(() => {
     loadUserData();
@@ -209,13 +212,19 @@ export default function ProfilePage() {
                   <VStack spacing={2} align="stretch">
                     {[
                       { icon: Lock, label: 'Security', color: 'green.500' },
-                      { icon: Bell, label: 'Notifications', color: 'blue.500' },
+                      { icon: Bell, label: 'Notifications', color: 'blue.500', action: () => router.push('/notifications') },
                       { icon: CreditCard, label: 'Google pay', color: 'red.500' },
                       { icon: Globe, label: 'Language', color: 'pink.500' },
                     ].map((item) => {
                       const Icon = item.icon;
                       return (
-                        <Card key={item.label} bg={cardBg} borderRadius="md">
+                        <Card 
+                          key={item.label} 
+                          bg={cardBg} 
+                          borderRadius="md"
+                          cursor={item.action ? 'pointer' : 'default'}
+                          onClick={item.action}
+                        >
                           <CardBody>
                             <Flex justify="space-between" align="center">
                               <HStack spacing={3}>
@@ -244,6 +253,35 @@ export default function ProfilePage() {
                         </Card>
                       );
                     })}
+                    <Card bg={cardBg} borderRadius="md" cursor="pointer" onClick={onContactOpen}>
+                      <CardBody>
+                        <Flex justify="space-between" align="center">
+                          <HStack spacing={3}>
+                            <Box w="20px" h="20px" display="flex" alignItems="center" justifyContent="center">
+                              <Text fontSize="sm">💬</Text>
+                            </Box>
+                            <Text fontSize="sm" color="gray.800">
+                              Contact Us
+                            </Text>
+                          </HStack>
+                          <IconButton
+                            icon={
+                              <Text
+                                style={{
+                                  transform: 'rotate(180deg)',
+                                  display: 'inline-block',
+                                }}
+                              >
+                                →
+                              </Text>
+                            }
+                            variant="ghost"
+                            size="sm"
+                            aria-label="Contact Us"
+                          />
+                        </Flex>
+                      </CardBody>
+                    </Card>
                   </VStack>
                 </Box>
 
@@ -401,7 +439,8 @@ export default function ProfilePage() {
           </TabPanels>
         </Tabs>
       </Box>
-      <BottomNavigation />
+      <BottomNavigation unreadCount={unreadNotificationCount + unreadAlertCount} />
+      <ContactUsModal isOpen={isContactOpen} onClose={onContactClose} />
     </Box>
   );
 }

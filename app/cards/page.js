@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Flex,
@@ -13,6 +13,8 @@ import {
   Card,
   CardBody,
   useColorModeValue,
+  Button,
+  useDisclosure,
 } from '@chakra-ui/react';
 import {
   ArrowLeft,
@@ -22,10 +24,13 @@ import {
   Wifi,
   Snowflake,
   QrCode,
+  MessageCircle,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 import StatusBar from '@/components/StatusBar';
 import BottomNavigation from '@/components/BottomNavigation';
+import ContactUsModal from '@/components/ContactUsModal';
 
 const mockCards = [
   {
@@ -62,8 +67,38 @@ const recentTransactions = [
 
 export default function CardsPage() {
   const [isFrozen, setIsFrozen] = useState(false);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [unreadAlertCount, setUnreadAlertCount] = useState(0);
   const router = useRouter();
   const cardBg = useColorModeValue('white', 'gray.800');
+  const { isOpen: isContactOpen, onOpen: onContactOpen, onClose: onContactClose } = useDisclosure();
+
+  useEffect(() => {
+    loadNotificationCounts();
+  }, []);
+
+  const loadNotificationCounts = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: notificationsData } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setUnreadNotificationCount((notificationsData || []).length);
+
+      const { data: alertsData } = await supabase
+        .from('alerts')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      setUnreadAlertCount((alertsData || []).length);
+    } catch (error) {
+      console.error('Error loading notification counts:', error);
+    }
+  };
 
   return (
     <Box minH="100vh" bg="gray.50" pb="80px">
@@ -82,6 +117,13 @@ export default function CardsPage() {
             </Text>
           </HStack>
           <HStack spacing={2}>
+            <IconButton
+              icon={<MessageCircle size={20} />}
+              variant="ghost"
+              colorScheme="purple"
+              aria-label="Contact Us"
+              onClick={onContactOpen}
+            />
             <IconButton
               icon={<Lock size={20} />}
               variant="ghost"
@@ -232,7 +274,8 @@ export default function CardsPage() {
           </VStack>
         </Box>
       </Box>
-      <BottomNavigation />
+      <BottomNavigation unreadCount={unreadNotificationCount + unreadAlertCount} />
+      <ContactUsModal isOpen={isContactOpen} onClose={onContactClose} />
     </Box>
   );
 }
