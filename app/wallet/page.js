@@ -805,21 +805,6 @@ function WalletPage() {
             <VStack spacing={3} align="stretch">
               {transactions.length > 0 ? (
                 transactions.map((transaction) => {
-                  const reviewStatus = transaction.review_status;
-                  let reviewBadgeLabel = '';
-                  let reviewBadgeColor = 'orange';
-
-                  if (reviewStatus === 'pending') {
-                    reviewBadgeLabel = 'Pending review';
-                    reviewBadgeColor = 'orange';
-                  } else if (reviewStatus === 'rejected') {
-                    reviewBadgeLabel = 'Rejected';
-                    reviewBadgeColor = 'red';
-                  } else if (reviewStatus === 'blocked') {
-                    reviewBadgeLabel = 'Blocked';
-                    reviewBadgeColor = 'red';
-                  }
-
                   return (
                     <HStack key={transaction.id} justify="space-between" p={2} borderRadius="md" _hover={{ bg: 'gray.50' }}>
                       <HStack spacing={3}>
@@ -842,16 +827,9 @@ function WalletPage() {
                           <Text fontSize="sm" fontWeight="semibold" color="gray.800">
                             {transaction.recipient_name || transaction.description || 'Transaction'}
                           </Text>
-                          <HStack spacing={2} align="center">
-                            <Text fontSize="xs" color="gray.500">
-                              {formatDate(transaction.created_at)} • {transaction.category}
-                            </Text>
-                            {reviewBadgeLabel && (
-                              <Badge colorScheme={reviewBadgeColor} fontSize="0.65rem">
-                                {reviewBadgeLabel}
-                              </Badge>
-                            )}
-                          </HStack>
+                          <Text fontSize="xs" color="gray.500">
+                            {formatDate(transaction.created_at)} • {transaction.category}
+                          </Text>
                         </VStack>
                       </HStack>
                       <Text
@@ -1227,21 +1205,6 @@ function WalletPage() {
               <VStack spacing={3} align="stretch">
                 {transactions.length > 0 ? (
                   transactions.slice(0, 8).map((transaction) => {
-                    const reviewStatus = transaction.review_status;
-                    let badgeLabel = '';
-                    let badgeColor = 'orange';
-
-                    if (reviewStatus === 'pending') {
-                      badgeLabel = 'Pending review';
-                      badgeColor = 'orange';
-                    } else if (reviewStatus === 'rejected') {
-                      badgeLabel = 'Rejected';
-                      badgeColor = 'red';
-                    } else if (reviewStatus === 'blocked') {
-                      badgeLabel = 'Blocked';
-                      badgeColor = 'red';
-                    }
-
                     return (
                       <HStack key={transaction.id} justify="space-between" p={3} borderRadius="md" bg="gray.50">
                         <HStack spacing={3}>
@@ -1264,16 +1227,9 @@ function WalletPage() {
                             <Text fontSize="sm" fontWeight="semibold" color="gray.800">
                               {transaction.recipient_name || transaction.description || 'Transaction'}
                             </Text>
-                            <HStack spacing={2} align="center">
-                              <Text fontSize="xs" color="gray.500">
-                                {formatDate(transaction.created_at)} • {transaction.category}
-                              </Text>
-                              {badgeLabel && (
-                                <Badge colorScheme={badgeColor} fontSize="0.65rem">
-                                  {badgeLabel}
-                                </Badge>
-                              )}
-                            </HStack>
+                            <Text fontSize="xs" color="gray.500">
+                              {formatDate(transaction.created_at)} • {transaction.category}
+                            </Text>
                           </VStack>
                         </HStack>
                         <Text fontSize="sm" fontWeight="semibold" color={transaction.amount > 0 ? 'green.600' : 'red.500'}>

@@ -397,18 +397,6 @@ export default function StatisticsPage() {
                                 >
                                   {transaction.amount > 0 ? '+' : ''}{formatCurrency(Math.abs(transaction.amount))}
                                 </Text>
-                                {transaction.status && (
-                                  <Badge
-                                    fontSize="xs"
-                                    colorScheme={
-                                      transaction.status === 'completed' ? 'green' :
-                                      transaction.status === 'pending' ? 'yellow' :
-                                      transaction.status === 'failed' ? 'red' : 'gray'
-                                    }
-                                  >
-                                    {transaction.status}
-                                  </Badge>
-                                )}
                               </VStack>
                             </Flex>
                           </CardBody>

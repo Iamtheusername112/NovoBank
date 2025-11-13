@@ -293,9 +293,6 @@ export default function ScheduledPaymentsPage() {
                             <Text fontSize="lg" fontWeight="semibold" color="gray.800">
                               {payment.recipient_name}
                             </Text>
-                            <Badge colorScheme={getStatusColor(payment.status)}>
-                              {payment.status}
-                            </Badge>
                             {payment.is_recurring && (
                               <Badge colorScheme="purple" variant="outline">
                                 <Repeat size={12} style={{ display: 'inline', marginRight: '4px' }} />
@@ -374,9 +371,6 @@ export default function ScheduledPaymentsPage() {
                           <Text fontSize="lg" fontWeight="semibold" color="gray.800">
                             {payment.recipient_name}
                           </Text>
-                          <Badge colorScheme={getStatusColor(payment.status)}>
-                            {payment.status}
-                          </Badge>
                         </HStack>
                         <Text fontSize="2xl" fontWeight="bold" color="gray.800">
                           {formatCurrency(payment.amount)}
@@ -435,9 +429,6 @@ export default function ScheduledPaymentsPage() {
                           <Text fontSize="md" fontWeight="semibold" color="gray.800">
                             {payment.recipient_name}
                           </Text>
-                          <Badge colorScheme={getStatusColor(payment.status)}>
-                            {payment.status}
-                          </Badge>
                         </HStack>
                         <Text fontSize="lg" fontWeight="bold" color="gray.800">
                           {formatCurrency(payment.amount)}
