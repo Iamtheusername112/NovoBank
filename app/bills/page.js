@@ -26,6 +26,8 @@ import {
   FormControl,
   FormLabel,
   Select,
+  Alert,
+  AlertIcon,
 } from '@chakra-ui/react';
 import {
   ArrowLeft,
@@ -65,6 +67,8 @@ export default function BillsPage() {
     is_recurring: true,
     frequency: 'monthly',
   });
+  const [accountStatus, setAccountStatus] = useState('active');
+  const [accountStatusReason, setAccountStatusReason] = useState('');
 
   useEffect(() => {
     setMounted(true);
@@ -104,6 +108,14 @@ export default function BillsPage() {
         .eq('user_id', user.id);
       setCards(cardsData || []);
 
+      const { data: profileData } = await supabase
+        .from('user_profiles')
+        .select('account_status, account_status_reason')
+        .eq('id', user.id)
+        .single();
+      setAccountStatus(profileData?.account_status || 'active');
+      setAccountStatusReason(profileData?.account_status_reason || '');
+
     } catch (error) {
       console.error('Error loading bills:', error);
       toast({
@@ -115,6 +127,23 @@ export default function BillsPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOpenPayModal = (bill) => {
+    if (accountStatus !== 'active') {
+      toast({
+        title: accountStatus === 'blocked' ? 'Account blocked' : 'Account under review',
+        description:
+          accountStatusReason ||
+          'Payments are temporarily disabled for this account. Please contact support.',
+        status: accountStatus === 'blocked' ? 'error' : 'warning',
+        duration: 4000,
+      });
+      return;
+    }
+
+    setSelectedBill(bill);
+    onPayOpen();
   };
 
   const handlePayBill = async () => {
@@ -144,6 +173,18 @@ export default function BillsPage() {
         return;
       }
 
+    if (accountStatus !== 'active') {
+      toast({
+        title: accountStatus === 'blocked' ? 'Account blocked' : 'Account under review',
+        description:
+          accountStatusReason ||
+          'Payments are temporarily disabled for this account. Please contact support.',
+        status: accountStatus === 'blocked' ? 'error' : 'warning',
+        duration: 4000,
+      });
+      return;
+    }
+
       const balance = parseFloat(account.balance || 0);
       if (balance < parseFloat(selectedBill.amount)) {
         toast({
@@ -168,30 +209,27 @@ export default function BillsPage() {
 
       if (updateError) throw updateError;
 
-      // Deduct from account balance
-      const newBalance = parseFloat(account.balance) - parseFloat(selectedBill.amount);
-      await supabase
-        .from('accounts')
-        .update({ balance: newBalance })
-        .eq('id', selectedAccount);
-
-      // Create transaction record
+      // Create pending transaction record for review
       await supabase
         .from('transactions')
         .insert({
           user_id: user.id,
+          account_id: selectedAccount,
           amount: -parseFloat(selectedBill.amount),
           transaction_type: 'sent',
           category: selectedBill.category,
           description: `Bill payment: ${selectedBill.bill_name}`,
           recipient_name: selectedBill.bill_name,
+          status: 'pending',
+          review_status: 'pending',
+          requires_manual_review: true,
         });
 
       toast({
-        title: 'Bill Paid',
-        description: `Successfully paid ${selectedBill.bill_name}`,
-        status: 'success',
-        duration: 3000,
+        title: 'Bill Payment Submitted',
+        description: `${selectedBill.bill_name} will be processed once approved.`,
+        status: 'info',
+        duration: 4000,
       });
 
       onPayClose();
@@ -202,7 +240,7 @@ export default function BillsPage() {
       console.error('Error paying bill:', error);
       toast({
         title: 'Error',
-        description: 'Failed to pay bill',
+        description: 'Failed to submit bill payment',
         status: 'error',
         duration: 3000,
       });
@@ -354,6 +392,21 @@ export default function BillsPage() {
       </Box>
 
       <Box px={4} py={4}>
+        {accountStatus !== 'active' && (
+          <Alert status={accountStatus === 'blocked' ? 'error' : 'warning'} borderRadius="lg" mb={6}>
+            <AlertIcon />
+            <VStack align="flex-start" spacing={1}>
+              <Text fontWeight="semibold" color="gray.800">
+                {accountStatus === 'blocked' ? 'Account blocked' : 'Account under review'}
+              </Text>
+              <Text fontSize="sm" color="gray.600">
+                {accountStatusReason ||
+                  'Payments are temporarily disabled. Please contact support for assistance.'}
+              </Text>
+            </VStack>
+          </Alert>
+        )}
+
         {/* Unpaid Bills */}
         {unpaidBills.length > 0 && (
           <Box mb={6}>
@@ -416,10 +469,7 @@ export default function BillsPage() {
                         </VStack>
                         <Button
                           colorScheme="purple"
-                          onClick={() => {
-                            setSelectedBill(bill);
-                            onPayOpen();
-                          }}
+                          onClick={() => handleOpenPayModal(bill)}
                           isDisabled={isOverdue && daysUntil < -30}
                         >
                           Pay Now
@@ -522,7 +572,11 @@ export default function BillsPage() {
             <Button variant="ghost" mr={3} onClick={onPayClose}>
               Cancel
             </Button>
-            <Button colorScheme="purple" onClick={handlePayBill}>
+            <Button
+              colorScheme="purple"
+              onClick={handlePayBill}
+              isDisabled={accountStatus !== 'active'}
+            >
               Pay Bill
             </Button>
           </ModalFooter>

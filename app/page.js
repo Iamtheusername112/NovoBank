@@ -174,13 +174,9 @@ export default function LandingPage() {
     handleAuthCallback();
   }, [router, toast]);
 
-  // Show loading state while processing auth callback
+  // Prevent hydration mismatch by not rendering until mounted
   if (!mounted) {
-    return (
-      <Box minH="100vh" bg={bgGradient} display="flex" alignItems="center" justifyContent="center">
-        <Text>Processing authentication...</Text>
-      </Box>
-    );
+    return null;
   }
 
   return (

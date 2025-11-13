@@ -142,9 +142,14 @@ export async function POST(request) {
     if (initialBalance > 0) {
       await supabaseAdmin.from('transactions').insert({
         user_id,
+        account_id: inserted.id,
         amount: initialBalance,
         transaction_type: 'deposit',
         status: 'completed',
+        review_status: 'approved',
+        requires_manual_review: false,
+        reviewed_by: auth.user.id,
+        reviewed_at: initialPostedAt.toISOString(),
         description: `Initial balance (${insertPayload.account_name})`,
         recipient_name: insertPayload.account_name,
         created_at: initialPostedAt.toISOString(),

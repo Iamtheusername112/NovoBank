@@ -90,6 +90,7 @@ export async function GET(request) {
       topAccountsResult,
       transactionsResult,
       todayTransactionsResult,
+      blockedAccountsResult,
     ] = await Promise.all([
       supabaseAdmin
         .from('user_profiles')
@@ -104,13 +105,17 @@ export async function GET(request) {
         .limit(10),
       supabaseAdmin
         .from('transactions')
-        .select('id, user_id, amount, transaction_type, status, description, recipient_name, created_at')
+        .select('id, user_id, account_id, amount, transaction_type, status, review_status, review_notes, requires_manual_review, description, recipient_name, created_at')
         .order('created_at', { ascending: false })
         .limit(50),
       supabaseAdmin
         .from('transactions')
         .select('amount, status')
         .gte('created_at', startOfToday.toISOString()),
+      supabaseAdmin
+        .from('user_profiles')
+        .select('id, first_name, last_name, email, account_status, account_status_reason, account_status_updated_at')
+        .eq('account_status', 'blocked'),
     ]);
 
     // Handle potential errors
@@ -119,12 +124,14 @@ export async function GET(request) {
     if (topAccountsResult.error) throw topAccountsResult.error;
     if (transactionsResult.error) throw transactionsResult.error;
     if (todayTransactionsResult.error) throw todayTransactionsResult.error;
+    if (blockedAccountsResult.error) throw blockedAccountsResult.error;
 
     const accountsStats = accountsStatsResult.data || [];
     const usersData = [...(usersResult.data || [])];
     const transactionsData = transactionsResult.data || [];
     const topAccountsData = topAccountsResult.data || [];
     const todayTransactions = todayTransactionsResult.data || [];
+    const blockedAccounts = blockedAccountsResult.data || [];
 
     const accountAggregation = accountsStats.reduce((acc, account) => {
       const userId = account.user_id;
@@ -191,9 +198,13 @@ export async function GET(request) {
       const owner = profileMap[tx.user_id];
       return {
         id: tx.id,
+        account_id: tx.account_id,
         amount: parseFloat(tx.amount || 0),
         transaction_type: tx.transaction_type,
         status: tx.status,
+        review_status: tx.review_status,
+        review_notes: tx.review_notes,
+        requires_manual_review: tx.requires_manual_review,
         description: tx.description,
         recipient_name: tx.recipient_name,
         created_at: tx.created_at,
@@ -204,7 +215,7 @@ export async function GET(request) {
     });
 
     const flaggedTransactions = mappedTransactions.filter(
-      (tx) => tx.status === 'pending' || Math.abs(tx.amount) >= 5000
+      (tx) => tx.review_status === 'pending' || Math.abs(tx.amount) >= 5000
     );
 
     const todaysVolume = todayTransactions.reduce((sum, tx) => {
@@ -228,7 +239,8 @@ export async function GET(request) {
       totalBalance,
       todaysVolume,
       flaggedCount: flaggedTransactions.length,
-      pendingTransactions: mappedTransactions.filter((tx) => tx.status === 'pending').length,
+      pendingTransactions: mappedTransactions.filter((tx) => tx.review_status === 'pending').length,
+      blockedAccountsCount: blockedAccounts.length,
     };
 
     return NextResponse.json({
@@ -236,7 +248,9 @@ export async function GET(request) {
       users: mappedUsers,
       transactions: mappedTransactions,
       flaggedTransactions: flaggedTransactions.slice(0, 10),
+      pendingReviews: mappedTransactions.filter((tx) => tx.review_status === 'pending'),
       accounts: mappedAccounts,
+      blockedAccounts,
     });
   } catch (error) {
     console.error('Admin overview error:', error);

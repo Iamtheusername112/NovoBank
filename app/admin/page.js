@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import {
   Box,
   Flex,
@@ -29,7 +30,6 @@ import {
   Input,
   Select,
   Spinner,
-  useToast,
   Alert,
   AlertIcon,
   Tag,
@@ -48,6 +48,7 @@ import {
   ModalBody,
   ModalFooter,
   ModalCloseButton,
+  CloseButton,
 } from '@chakra-ui/react';
 import {
   Users,
@@ -128,7 +129,7 @@ const formatDate = (value) => {
   }).format(date);
 };
 
-const DEFAULT_ACCOUNT_FORM = {
+const getDefaultAccountForm = () => ({
   userId: '',
   accountName: '',
   accountNumber: '',
@@ -139,20 +140,20 @@ const DEFAULT_ACCOUNT_FORM = {
   isPrimary: false,
   bankName: '',
   bankLogo: '',
-};
+});
 
-const DEFAULT_TRANSACTION_FORM = {
+const getDefaultTransactionForm = () => ({
   userId: '',
   accountId: '',
   amount: '',
   description: '',
   postedAt: new Date().toISOString().slice(0, 16),
-};
+});
 
-const AdminDashboard = () => {
+const AdminDashboardComponent = () => {
   const router = useRouter();
-  const toast = useToast();
 
+  const [mounted, setMounted] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [authError, setAuthError] = useState('');
@@ -163,18 +164,21 @@ const AdminDashboard = () => {
 
   const [userSearch, setUserSearch] = useState('');
   const [transactionFilter, setTransactionFilter] = useState('all');
-  const [mounted, setMounted] = useState(false);
-
   const [lastUpdated, setLastUpdated] = useState(null);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [transactionMode, setTransactionMode] = useState('deposit');
-  const [accountForm, setAccountForm] = useState({ ...DEFAULT_ACCOUNT_FORM });
+  const [accountForm, setAccountForm] = useState(() => ({ ...getDefaultAccountForm() }));
   const [accountModalLoading, setAccountModalLoading] = useState(false);
-  const [transactionForm, setTransactionForm] = useState({ ...DEFAULT_TRANSACTION_FORM });
+  const [transactionForm, setTransactionForm] = useState(() => ({ ...getDefaultTransactionForm() }));
   const [transactionModalLoading, setTransactionModalLoading] = useState(false);
   const [availableAccounts, setAvailableAccounts] = useState([]);
   const [fetchingAccounts, setFetchingAccounts] = useState(false);
+  const [reviewActionLoading, setReviewActionLoading] = useState({});
+  const [reviewModalState, setReviewModalState] = useState({ isOpen: false, action: null, transaction: null });
+  const [reviewNotesInput, setReviewNotesInput] = useState('');
+  const [accountStatusLoading, setAccountStatusLoading] = useState({});
+  const [inlineNotification, setInlineNotification] = useState(null);
 
   const authorizedFetch = useCallback(
     async (url, init = {}) => {
@@ -246,17 +250,12 @@ const AdminDashboard = () => {
       const message = err.message || 'Unexpected error loading admin data.';
       setError(message);
       if (!authError) {
-        toast({
-          title: 'Failed to load dashboard',
-          description: message,
-          status: 'error',
-          duration: 4000,
-        });
+        showInlineNotification('error', 'Failed to load dashboard', message);
       }
     } finally {
       setLoading(false);
     }
-  }, [toast, authError]);
+  }, [authorizedFetch, authError, showInlineNotification]);
 
   useEffect(() => {
     const verifyAdmin = async () => {
@@ -294,6 +293,14 @@ const AdminDashboard = () => {
     verifyAdmin();
   }, [fetchAdminData, router]);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return null;
+  }
+
   const stats = data?.stats ?? {
     totalUsers: 0,
     newUsers24h: 0,
@@ -302,6 +309,7 @@ const AdminDashboard = () => {
     todaysVolume: 0,
     flaggedCount: 0,
     pendingTransactions: 0,
+    blockedAccountsCount: 0,
   };
 
   const transactionTrendData = useMemo(() => {
@@ -348,8 +356,32 @@ const AdminDashboard = () => {
     if (!data?.transactions) return [];
     if (transactionFilter === 'all') return data.transactions;
     if (transactionFilter === 'flagged') return data.flaggedTransactions || [];
+    if (transactionFilter === 'pending') {
+      return data.transactions.filter((tx) => tx.review_status === 'pending');
+    }
     return data.transactions.filter((tx) => tx.status === transactionFilter);
   }, [data?.transactions, data?.flaggedTransactions, transactionFilter]);
+
+  const pendingReviews = data?.pendingReviews ?? [];
+  const pendingReviewCount = pendingReviews.length;
+  const blockedAccounts = data?.blockedAccounts ?? [];
+  const blockedAccountCount = blockedAccounts.length;
+
+  const showInlineNotification = useCallback((status, title, description) => {
+    setInlineNotification({ status, title, description });
+  }, []);
+
+  const dismissInlineNotification = useCallback(() => {
+    setInlineNotification(null);
+  }, []);
+
+  useEffect(() => {
+    if (!inlineNotification) return undefined;
+    const timer = setTimeout(() => {
+      setInlineNotification(null);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [inlineNotification]);
 
   const handleAccountFieldChange = (field) => (event) => {
     const value = field === 'isPrimary' ? event.target.checked : event.target.value;
@@ -365,6 +397,135 @@ const AdminDashboard = () => {
       setTransactionForm((prev) => ({ ...prev, [field]: value }));
     }
   };
+
+  const executeReviewAction = useCallback(
+    async (transaction, action, reviewNotes) => {
+      if (!transaction?.id) return;
+
+      setReviewActionLoading((prev) => ({ ...prev, [transaction.id]: action }));
+
+      try {
+        const payload = {
+          transaction_id: transaction.id,
+          action,
+        };
+
+        if (reviewNotes && reviewNotes.trim().length > 0) {
+          payload.review_notes = reviewNotes.trim();
+        }
+
+        const response = await authorizedFetch('/api/admin/transactions', {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          let message = 'Unable to update transaction.';
+          try {
+            const errorPayload = await response.json();
+            if (errorPayload?.error) {
+              message = errorPayload.error;
+            }
+          } catch (parseError) {
+            // ignore parse errors
+          }
+          throw new Error(message);
+        }
+
+        const successTitle =
+          action === 'approve'
+            ? 'Transaction approved'
+            : action === 'reject'
+            ? 'Transaction rejected'
+            : 'Account blocked';
+        const successStatus = action === 'approve' ? 'success' : action === 'reject' ? 'warning' : 'error';
+        showInlineNotification(successStatus, successTitle, '');
+
+        setReviewModalState({ isOpen: false, action: null, transaction: null });
+        setReviewNotesInput('');
+        await fetchAdminData();
+      } catch (err) {
+        console.error('Review action failed:', err);
+        showInlineNotification('error', 'Action failed', err.message || 'Could not update transaction review status.');
+      } finally {
+        setReviewActionLoading((prev) => {
+          const next = { ...prev };
+          delete next[transaction.id];
+          return next;
+        });
+      }
+    },
+    [authorizedFetch, fetchAdminData, toast]
+  );
+
+  const handleReviewAction = (transaction, action, existingNotes = '') => {
+    if (!transaction) return;
+    setReviewNotesInput(existingNotes || transaction.review_notes || '');
+    setReviewModalState({ isOpen: true, action, transaction });
+  };
+
+  const closeReviewModal = () => {
+    if (reviewModalState.transaction) {
+      const loadingAction = reviewActionLoading[reviewModalState.transaction.id];
+      if (loadingAction) {
+        return;
+      }
+    }
+    setReviewModalState({ isOpen: false, action: null, transaction: null });
+    setReviewNotesInput('');
+  };
+
+  const handleAccountStatusUpdate = useCallback(
+    async (userId, status = 'active') => {
+      if (!userId) return;
+
+      setAccountStatusLoading((prev) => ({ ...prev, [userId]: status }));
+      try {
+        const response = await authorizedFetch('/api/admin/account-status', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            user_id: userId,
+            account_status: status,
+          }),
+        });
+
+        if (!response.ok) {
+          let message = 'Unable to update account status.';
+          try {
+            const errorPayload = await response.json();
+            if (errorPayload?.error) {
+              message = errorPayload.error;
+            }
+          } catch (parseError) {
+            // ignore parse errors
+          }
+          throw new Error(message);
+        }
+
+        showInlineNotification(
+          'success',
+          status === 'active' ? 'Account unblocked' : 'Status updated',
+          ''
+        );
+
+        await fetchAdminData();
+      } catch (err) {
+        console.error('Account status update failed:', err);
+        showInlineNotification(
+          'error',
+          'Action failed',
+          err.message || 'Could not update account status.'
+        );
+      } finally {
+        setAccountStatusLoading((prev) => {
+          const next = { ...prev };
+          delete next[userId];
+          return next;
+        });
+      }
+    },
+    [authorizedFetch, fetchAdminData, toast]
+  );
 
   const loadUserAccounts = useCallback(
     async (userId) => {
@@ -382,39 +543,36 @@ const AdminDashboard = () => {
         setAvailableAccounts(payload.accounts || []);
       } catch (err) {
         console.error('Fetch user accounts error:', err);
-        toast({
-          title: 'Failed to load accounts',
-          description: err.message || 'Could not retrieve accounts for this customer.',
-          status: 'error',
-          duration: 3000,
-        });
+        showInlineNotification(
+          'error',
+          'Failed to load accounts',
+          err.message || 'Could not retrieve accounts for this customer.'
+        );
         setAvailableAccounts([]);
       } finally {
         setFetchingAccounts(false);
       }
     },
-    [authorizedFetch, toast]
+    [authorizedFetch, showInlineNotification]
   );
 
   const handleCreateAccount = useCallback(async () => {
     if (!accountForm.userId || !accountForm.accountName.trim()) {
-      toast({
-        title: 'Missing details',
-        description: 'Select a customer and provide an account name.',
-        status: 'warning',
-        duration: 3000,
-      });
+      showInlineNotification(
+        'warning',
+        'Missing details',
+        'Select a customer and provide an account name.'
+      );
       return;
     }
 
     const initialBalanceValue = parseFloat(accountForm.initialBalance);
     if (Number.isNaN(initialBalanceValue) || initialBalanceValue < 0) {
-      toast({
-        title: 'Invalid amount',
-        description: 'Initial balance must be zero or a positive amount.',
-        status: 'warning',
-        duration: 3000,
-      });
+      showInlineNotification(
+        'warning',
+        'Invalid amount',
+        'Initial balance must be zero or a positive amount.'
+      );
       return;
     }
 
@@ -422,12 +580,11 @@ const AdminDashboard = () => {
     if (accountForm.initialBalancePostedAt) {
       const postedDate = new Date(accountForm.initialBalancePostedAt);
       if (Number.isNaN(postedDate.getTime())) {
-        toast({
-          title: 'Invalid date',
-          description: 'Choose a valid posting date for the starting balance.',
-          status: 'warning',
-          duration: 3000,
-        });
+        showInlineNotification(
+          'warning',
+          'Invalid date',
+          'Choose a valid posting date for the starting balance.'
+        );
         return;
       }
       postedAtIso = postedDate.toISOString();
@@ -458,48 +615,44 @@ const AdminDashboard = () => {
         throw new Error(result.error || 'Unable to create account.');
       }
 
-      toast({
-        title: 'Account created',
-        description: 'The account has been added successfully.',
-        status: 'success',
-        duration: 3000,
-      });
+      showInlineNotification(
+        'success',
+        'Account created',
+        'The account has been added successfully.'
+      );
 
-      setAccountForm({ ...DEFAULT_ACCOUNT_FORM });
+      setAccountForm({ ...getDefaultAccountForm() });
       setIsAccountModalOpen(false);
       fetchAdminData();
     } catch (err) {
       console.error('Create account error:', err);
-      toast({
-        title: 'Failed to create account',
-        description: err.message || 'Unable to create account at this time.',
-        status: 'error',
-        duration: 3000,
-      });
+      showInlineNotification(
+        'error',
+        'Failed to create account',
+        err.message || 'Unable to create account at this time.'
+      );
     } finally {
       setAccountModalLoading(false);
     }
-  }, [accountForm, authorizedFetch, fetchAdminData, toast]);
+  }, [accountForm, authorizedFetch, fetchAdminData, showInlineNotification]);
 
   const handleProcessTransaction = useCallback(async () => {
     if (!transactionForm.userId || !transactionForm.accountId) {
-      toast({
-        title: 'Select customer and account',
-        description: 'Choose a customer and the target account.',
-        status: 'warning',
-        duration: 3000,
-      });
+      showInlineNotification(
+        'warning',
+        'Select customer and account',
+        'Choose a customer and the target account.'
+      );
       return;
     }
 
     const amountValue = parseFloat(transactionForm.amount);
     if (Number.isNaN(amountValue) || amountValue <= 0) {
-      toast({
-        title: 'Invalid amount',
-        description: 'Enter an amount greater than zero.',
-        status: 'warning',
-        duration: 3000,
-      });
+      showInlineNotification(
+        'warning',
+        'Invalid amount',
+        'Enter an amount greater than zero.'
+      );
       return;
     }
 
@@ -507,12 +660,11 @@ const AdminDashboard = () => {
       ? new Date(transactionForm.postedAt)
       : new Date();
     if (Number.isNaN(postedDate.getTime())) {
-      toast({
-        title: 'Invalid date',
-        description: 'Choose a valid posting date and time.',
-        status: 'warning',
-        duration: 3000,
-      });
+      showInlineNotification(
+        'warning',
+        'Invalid date',
+        'Choose a valid posting date and time.'
+      );
       return;
     }
 
@@ -537,12 +689,11 @@ const AdminDashboard = () => {
         throw new Error(result.error || 'Unable to process transaction.');
       }
 
-      toast({
-        title: `Transaction recorded`,
-        description: `The ${transactionMode} was applied successfully.`,
-        status: 'success',
-        duration: 3000,
-      });
+      showInlineNotification(
+        'success',
+        'Transaction recorded',
+        `The ${transactionMode} was applied successfully.`
+      );
 
       setAvailableAccounts((prev) =>
         prev.map((account) =>
@@ -552,30 +703,29 @@ const AdminDashboard = () => {
         )
       );
 
-      setTransactionForm({ ...DEFAULT_TRANSACTION_FORM, postedAt: new Date().toISOString().slice(0, 16) });
+      setTransactionForm({ ...getDefaultTransactionForm(), postedAt: new Date().toISOString().slice(0, 16) });
       setIsTransactionModalOpen(false);
       fetchAdminData();
     } catch (err) {
       console.error('Process transaction error:', err);
-      toast({
-        title: 'Failed to process transaction',
-        description: err.message || 'Unable to complete this operation.',
-        status: 'error',
-        duration: 3000,
-      });
+      showInlineNotification(
+        'error',
+        'Failed to process transaction',
+        err.message || 'Unable to complete this operation.'
+      );
     } finally {
       setTransactionModalLoading(false);
     }
-  }, [transactionForm, transactionMode, authorizedFetch, fetchAdminData, toast]);
+  }, [transactionForm, transactionMode, authorizedFetch, fetchAdminData, showInlineNotification]);
 
   const openCreateAccountModal = () => {
-    setAccountForm({ ...DEFAULT_ACCOUNT_FORM, initialBalancePostedAt: new Date().toISOString().slice(0, 16) });
+    setAccountForm({ ...getDefaultAccountForm(), initialBalancePostedAt: new Date().toISOString().slice(0, 16) });
     setIsAccountModalOpen(true);
   };
 
   const openTransactionModal = (mode) => {
     setTransactionMode(mode);
-    setTransactionForm({ ...DEFAULT_TRANSACTION_FORM, postedAt: new Date().toISOString().slice(0, 16) });
+    setTransactionForm({ ...getDefaultTransactionForm(), postedAt: new Date().toISOString().slice(0, 16) });
     setAvailableAccounts([]);
     setIsTransactionModalOpen(true);
   };
@@ -583,24 +733,16 @@ const AdminDashboard = () => {
   const closeAccountModal = () => {
     if (accountModalLoading) return;
     setIsAccountModalOpen(false);
-    setAccountForm({ ...DEFAULT_ACCOUNT_FORM, initialBalancePostedAt: new Date().toISOString().slice(0, 16) });
+    setAccountForm({ ...getDefaultAccountForm(), initialBalancePostedAt: new Date().toISOString().slice(0, 16) });
   };
 
   const closeTransactionModal = () => {
     if (transactionModalLoading) return;
     setIsTransactionModalOpen(false);
-    setTransactionForm({ ...DEFAULT_TRANSACTION_FORM, postedAt: new Date().toISOString().slice(0, 16) });
+    setTransactionForm({ ...getDefaultTransactionForm(), postedAt: new Date().toISOString().slice(0, 16) });
     setAvailableAccounts([]);
     setFetchingAccounts(false);
   };
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return null;
-  }
 
   if (checkingAuth) {
     return (
@@ -663,6 +805,34 @@ const AdminDashboard = () => {
         </Flex>
       </Box>
 
+      {inlineNotification && (
+        <Box px={{ base: 4, lg: 8 }} mt={4}>
+          <Alert
+            status={inlineNotification.status}
+            borderRadius="lg"
+            variant="left-accent"
+            alignItems="flex-start"
+          >
+            <AlertIcon />
+            <Box flex="1">
+              <Text fontWeight="semibold" color="gray.800">
+                {inlineNotification.title}
+              </Text>
+              {inlineNotification.description && (
+                <Text fontSize="sm" color="gray.600">
+                  {inlineNotification.description}
+                </Text>
+              )}
+            </Box>
+            <CloseButton
+              position="relative"
+              top={1}
+              onClick={dismissInlineNotification}
+            />
+          </Alert>
+        </Box>
+      )}
+
       <Box px={{ base: 4, lg: 8 }} py={6}>
         {error && (
           <Alert status="error" mb={6} borderRadius="lg">
@@ -696,7 +866,7 @@ const AdminDashboard = () => {
             icon={ShieldAlert}
             label="Alerts & Flags"
           value={formatNumber(stats.flaggedCount)}
-            helper={`${stats.pendingTransactions} transactions pending`}
+            helper={`${stats.pendingTransactions} pending • ${stats.blockedAccountsCount} blocked`}
           />
         </SimpleGrid>
 
@@ -832,38 +1002,53 @@ const AdminDashboard = () => {
                       </Tr>
                     </Thead>
                     <Tbody>
-                      {filteredTransactions.map((tx) => (
-                        <Tr key={tx.id}>
-                          <Td>{tx.id.slice(0, 8).toUpperCase()}</Td>
-                          <Td>
-                            <VStack align="flex-start" spacing={0}>
-                              <Text fontWeight="semibold" color="gray.800">
-                                {tx.customer}
-                              </Text>
-                              <Text fontSize="xs" color="gray.500">
-                                {tx.customer_email || '—'}
-                              </Text>
-                            </VStack>
-                          </Td>
-                          <Td>{tx.recipient_name || '—'}</Td>
-                          <Td>
-                            <Badge
-                              colorScheme={
-                                tx.status === 'completed'
-                                  ? 'green'
-                                  : tx.status === 'pending'
-                                  ? 'orange'
-                                  : 'red'
-                              }
-                            >
-                              {tx.status}
-                            </Badge>
-                          </Td>
-                          <Td textTransform="capitalize">{tx.transaction_type}</Td>
-                          <Td isNumeric>{formatCurrency(tx.amount)}</Td>
-                          <Td>{formatDate(tx.created_at)}</Td>
-                        </Tr>
-                      ))}
+                      {filteredTransactions.map((tx) => {
+                        const isPendingReview = tx.review_status === 'pending';
+                        const isRejected = tx.review_status === 'rejected';
+                        const isBlocked = tx.review_status === 'blocked';
+                        let badgeColor = 'purple';
+                        let badgeLabel = tx.status || 'Processing';
+
+                        if (isPendingReview) {
+                          badgeColor = 'orange';
+                          badgeLabel = 'Pending review';
+                        } else if (isBlocked) {
+                          badgeColor = 'red';
+                          badgeLabel = 'Blocked';
+                        } else if (isRejected) {
+                          badgeColor = 'red';
+                          badgeLabel = 'Rejected';
+                        } else if (tx.status === 'completed') {
+                          badgeColor = 'green';
+                          badgeLabel = 'Completed';
+                        } else if (tx.status === 'failed') {
+                          badgeColor = 'red';
+                          badgeLabel = 'Failed';
+                        }
+
+                        return (
+                          <Tr key={tx.id}>
+                            <Td>{tx.id.slice(0, 8).toUpperCase()}</Td>
+                            <Td>
+                              <VStack align="flex-start" spacing={0}>
+                                <Text fontWeight="semibold" color="gray.800">
+                                  {tx.customer}
+                                </Text>
+                                <Text fontSize="xs" color="gray.500">
+                                  {tx.customer_email || '—'}
+                                </Text>
+                              </VStack>
+                            </Td>
+                            <Td>{tx.recipient_name || '—'}</Td>
+                            <Td>
+                              <Badge colorScheme={badgeColor}>{badgeLabel}</Badge>
+                            </Td>
+                            <Td textTransform="capitalize">{tx.transaction_type}</Td>
+                            <Td isNumeric>{formatCurrency(tx.amount)}</Td>
+                            <Td>{formatDate(tx.created_at)}</Td>
+                          </Tr>
+                        );
+                      })}
                       {filteredTransactions.length === 0 && (
                         <Tr>
                           <Td colSpan={7}>
@@ -1015,6 +1200,194 @@ const AdminDashboard = () => {
 
                 <Card bg="white" borderRadius="xl" boxShadow="sm">
                   <CardBody>
+                    <HStack justify="space-between" align="center">
+                      <HStack spacing={3}>
+                        <Clock size={18} color="#7c3aed" />
+                        <Heading size="sm" color="gray.800">
+                          Pending approvals
+                        </Heading>
+                      </HStack>
+                      <Badge colorScheme={pendingReviewCount > 0 ? 'orange' : 'green'} variant="subtle">
+                        {pendingReviewCount} waiting
+                      </Badge>
+                    </HStack>
+                    <Text fontSize="sm" color="gray.500" mt={2} mb={4}>
+                      Transactions requiring manual approval before funds are posted to customer accounts.
+                    </Text>
+                    <VStack align="stretch" spacing={3}>
+                      {pendingReviews.length > 0 ? (
+                        pendingReviews.map((tx) => {
+                          const loadingAction = reviewActionLoading[tx.id];
+                          const canApprove = Boolean(tx.account_id);
+                          const approveTooltip = canApprove
+                            ? ''
+                            : 'Cannot approve because this legacy transaction is not linked to an account.';
+                          return (
+                            <Box
+                              key={tx.id}
+                              p={3}
+                              border="1px solid"
+                              borderColor="gray.200"
+                              borderRadius="lg"
+                            >
+                              <Flex
+                                direction={{ base: 'column', md: 'row' }}
+                                justify="space-between"
+                                align={{ base: 'flex-start', md: 'center' }}
+                                gap={3}
+                              >
+                                <VStack align="flex-start" spacing={1}>
+                                  <Text fontWeight="semibold" color="gray.800">
+                                    {tx.customer}
+                                  </Text>
+                                  <Text fontSize="xs" color="gray.500">
+                                    {tx.customer_email || '—'}
+                                  </Text>
+                                  <Text fontSize="sm" color="gray.600">
+                                    {tx.description || 'No description provided'}
+                                  </Text>
+                                </VStack>
+                                <VStack align="flex-end" spacing={1}>
+                                  <Text fontSize="xs" color="gray.500">
+                                    Amount
+                                  </Text>
+                                  <Text fontWeight="bold" color="gray.800">
+                                    {formatCurrency(tx.amount)}
+                                  </Text>
+                                  <Text fontSize="xs" color="gray.500">
+                                    {formatDate(tx.created_at)}
+                                  </Text>
+                                </VStack>
+                              </Flex>
+                              {tx.review_notes && (
+                                <Text fontSize="xs" color="gray.500" mt={2}>
+                                  Notes: {tx.review_notes}
+                                </Text>
+                              )}
+                              {!canApprove && (
+                                <Text fontSize="xs" color="orange.500" mt={2}>
+                                  Approval unavailable: link an account before approving or choose Reject/Block.
+                                </Text>
+                              )}
+                              <HStack justify="flex-end" spacing={2} mt={3}>
+                                <ChakraTooltip
+                                  label={approveTooltip}
+                                  isDisabled={canApprove}
+                                  hasArrow
+                                  placement="top"
+                                >
+                                  <Button
+                                    size="sm"
+                                    colorScheme="green"
+                                    variant="solid"
+                                    isLoading={loadingAction === 'approve'}
+                                    isDisabled={!canApprove || Boolean(loadingAction)}
+                                    onClick={() => handleReviewAction(tx, 'approve', tx.review_notes)}
+                                  >
+                                    Approve
+                                  </Button>
+                                </ChakraTooltip>
+                                <Button
+                                  size="sm"
+                                  colorScheme="orange"
+                                  variant="outline"
+                                  isLoading={loadingAction === 'reject'}
+                                  isDisabled={Boolean(loadingAction)}
+                                  onClick={() => handleReviewAction(tx, 'reject', tx.review_notes)}
+                                >
+                                  Reject
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  colorScheme="red"
+                                  variant="outline"
+                                  isLoading={loadingAction === 'block'}
+                                  isDisabled={Boolean(loadingAction)}
+                                  onClick={() => handleReviewAction(tx, 'block', tx.review_notes)}
+                                >
+                                  Block account
+                                </Button>
+                              </HStack>
+                            </Box>
+                          );
+                        })
+                      ) : (
+                        <Text textAlign="center" color="gray.500">
+                          All approvals are up to date.
+                        </Text>
+                      )}
+                    </VStack>
+                  </CardBody>
+                </Card>
+
+                <Card bg="white" borderRadius="xl" boxShadow="sm">
+                  <CardBody>
+                    <HStack spacing={3} mb={3} align="center">
+                      <ShieldAlert size={18} color="#7c3aed" />
+                      <Heading size="sm" color="gray.800">
+                        Blocked accounts
+                      </Heading>
+                      <Badge colorScheme={blockedAccountCount > 0 ? 'red' : 'green'} variant="subtle">
+                        {blockedAccountCount}
+                      </Badge>
+                    </HStack>
+                    <Text fontSize="sm" color="gray.500" mb={4}>
+                      Accounts that were blocked during transaction review. Unblock them once issues are resolved.
+                    </Text>
+                    <VStack align="stretch" spacing={3}>
+                      {blockedAccounts.length > 0 ? (
+                        blockedAccounts.map((account) => (
+                          <Box
+                            key={account.id}
+                            p={3}
+                            border="1px solid"
+                            borderColor="gray.200"
+                            borderRadius="lg"
+                          >
+                            <Flex
+                              direction={{ base: 'column', md: 'row' }}
+                              justify="space-between"
+                              align={{ base: 'flex-start', md: 'center' }}
+                              gap={3}
+                            >
+                              <VStack align="flex-start" spacing={1}>
+                                <Text fontWeight="semibold" color="gray.800">
+                                  {account.first_name} {account.last_name}
+                                </Text>
+                                <Text fontSize="xs" color="gray.500">
+                                  {account.email}
+                                </Text>
+                                <Text fontSize="sm" color="gray.600">
+                                  {account.account_status_reason || 'No reason provided'}
+                                </Text>
+                                <Text fontSize="xs" color="gray.400">
+                                  Updated {formatDate(account.account_status_updated_at)}
+                                </Text>
+                              </VStack>
+                              <Button
+                                size="sm"
+                                colorScheme="green"
+                                variant="solid"
+                                isLoading={accountStatusLoading[account.id] === 'active'}
+                                isDisabled={Boolean(accountStatusLoading[account.id])}
+                                onClick={() => handleAccountStatusUpdate(account.id, 'active')}
+                              >
+                                Unblock account
+                              </Button>
+                            </Flex>
+                          </Box>
+                        ))
+                      ) : (
+                        <Text textAlign="center" color="gray.500">
+                          No blocked accounts at the moment.
+                        </Text>
+                      )}
+                    </VStack>
+                  </CardBody>
+                </Card>
+
+                <Card bg="white" borderRadius="xl" boxShadow="sm">
+                  <CardBody>
                     <HStack spacing={3} mb={3}>
                       <Clock size={18} color="#7c3aed" />
                       <Heading size="sm" color="gray.800">
@@ -1045,7 +1418,7 @@ const AdminDashboard = () => {
                             </Text>
                           </VStack>
                           <Tag colorScheme="purple" variant="subtle">
-                            {tx.status === 'pending' ? 'Pending review' : 'High value'}
+                            {tx.review_status === 'pending' ? 'Pending review' : 'High value'}
                           </Tag>
                           <Text fontWeight="bold" color="gray.800">
                             {formatCurrency(tx.amount)}
@@ -1326,6 +1699,62 @@ const AdminDashboard = () => {
         </ModalContent>
       </Modal>
 
+      <Modal isOpen={reviewModalState.isOpen} onClose={closeReviewModal} size="md">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Review Transaction</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack align="stretch" spacing={4}>
+              <FormControl isRequired>
+                <FormLabel>Transaction ID</FormLabel>
+                <Input value={reviewModalState.transaction?.id || ''} isReadOnly />
+              </FormControl>
+              <FormControl isRequired>
+                <FormLabel>Action</FormLabel>
+                <Select
+                  value={reviewModalState.action}
+                  onChange={(e) => {
+                    const action = e.target.value;
+                    setReviewModalState((prev) => ({ ...prev, action }));
+                  }}
+                >
+                  <option value="approve">Approve</option>
+                  <option value="reject">Reject</option>
+                  <option value="block">Block Account</option>
+                </Select>
+              </FormControl>
+              <FormControl>
+                <FormLabel>Notes (optional)</FormLabel>
+                <Textarea
+                  placeholder="Add any notes for the review"
+                  value={reviewNotesInput}
+                  onChange={(e) => setReviewNotesInput(e.target.value)}
+                />
+              </FormControl>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={closeReviewModal} isDisabled={reviewActionLoading[reviewModalState.transaction?.id]}>
+              Cancel
+            </Button>
+            <Button
+              colorScheme={
+                reviewModalState.action === 'approve'
+                  ? 'green'
+                  : reviewModalState.action === 'reject'
+                  ? 'orange'
+                  : 'red'
+              }
+              onClick={() => executeReviewAction(reviewModalState.transaction, reviewModalState.action, reviewNotesInput)}
+              isLoading={reviewActionLoading[reviewModalState.transaction?.id]}
+            >
+              {reviewModalState.action}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
       {loading && (
         <Flex
           position="fixed"
@@ -1342,6 +1771,12 @@ const AdminDashboard = () => {
     </Box>
   );
 };
+
+const AdminDashboard = dynamic(() => Promise.resolve(AdminDashboardComponent), {
+  ssr: false,
+  loading: () => null,
+  suspense: false,
+});
 
 export default AdminDashboard;
 

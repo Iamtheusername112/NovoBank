@@ -28,6 +28,8 @@ import {
   RadioGroup,
   Radio,
   Stack,
+  Alert,
+  AlertIcon,
 } from '@chakra-ui/react';
 import {
   ArrowLeft,
@@ -57,6 +59,8 @@ export default function DepositPage() {
   const [selectedAccount, setSelectedAccount] = useState('');
   const [depositMethod, setDepositMethod] = useState('check');
   const [checkImage, setCheckImage] = useState(null);
+  const [accountStatus, setAccountStatus] = useState('active');
+  const [accountStatusReason, setAccountStatusReason] = useState('');
 
   useEffect(() => {
     setMounted(true);
@@ -88,6 +92,14 @@ export default function DepositPage() {
         .eq('user_id', user.id);
       setCards(cardsData || []);
 
+      const { data: profileData } = await supabase
+        .from('user_profiles')
+        .select('account_status, account_status_reason')
+        .eq('id', user.id)
+        .single();
+      setAccountStatus(profileData?.account_status || 'active');
+      setAccountStatusReason(profileData?.account_status_reason || '');
+
       // Set default account
       if (accountsData && accountsData.length > 0) {
         const primary = accountsData.find(a => a.is_primary) || accountsData[0];
@@ -105,6 +117,22 @@ export default function DepositPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOpenDepositModal = () => {
+    if (accountStatus !== 'active') {
+      toast({
+        title: accountStatus === 'blocked' ? 'Account blocked' : 'Account under review',
+        description:
+          accountStatusReason ||
+          'Deposits are temporarily disabled for this account. Please contact support.',
+        status: accountStatus === 'blocked' ? 'error' : 'warning',
+        duration: 4000,
+      });
+      return;
+    }
+
+    onDepositOpen();
   };
 
   const handleCheckImageUpload = async (event) => {
@@ -173,36 +201,43 @@ export default function DepositPage() {
       return;
     }
 
+    if (accountStatus !== 'active') {
+      toast({
+        title: accountStatus === 'blocked' ? 'Account blocked' : 'Account under review',
+        description:
+          accountStatusReason ||
+          'Deposits are temporarily disabled for this account. Please contact support.',
+        status: accountStatus === 'blocked' ? 'error' : 'warning',
+        duration: 4000,
+      });
+      return;
+    }
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       const amount = parseFloat(depositAmount);
 
-      // Update account balance
       const account = accounts.find(a => a.id === selectedAccount);
       if (!account) {
         throw new Error('Account not found');
       }
 
-      const newBalance = parseFloat(account.balance) + amount;
-      const { error: updateError } = await supabase
-        .from('accounts')
-        .update({ balance: newBalance })
-        .eq('id', selectedAccount);
-
-      if (updateError) throw updateError;
-
-      // Create transaction record
+      // Create pending transaction record for review
       const { error: transactionError } = await supabase
         .from('transactions')
         .insert({
           user_id: user.id,
+          account_id: selectedAccount,
           amount: amount,
           transaction_type: 'deposit',
           category: 'Deposit',
           description: `Deposit via ${depositMethod}`,
-          recipient_name: 'Self',
+          recipient_name: account.account_name || 'Self',
+          status: 'pending',
+          review_status: 'pending',
+          requires_manual_review: true,
         });
 
       if (transactionError) throw transactionError;
@@ -223,10 +258,10 @@ export default function DepositPage() {
       }
 
       toast({
-        title: 'Deposit Successful',
-        description: `$${amount.toFixed(2)} deposited successfully`,
-        status: 'success',
-        duration: 3000,
+        title: 'Deposit Submitted',
+        description: '$' + amount.toFixed(2) + ' is pending approval. We will notify you once it is processed.',
+        status: 'info',
+        duration: 4000,
       });
 
       onDepositClose();
@@ -242,7 +277,7 @@ export default function DepositPage() {
       console.error('Error processing deposit:', error);
       toast({
         title: 'Error',
-        description: 'Failed to process deposit. Please try again.',
+        description: 'Failed to submit deposit. Please try again.',
         status: 'error',
         duration: 3000,
       });
@@ -291,6 +326,24 @@ export default function DepositPage() {
 
       <Box px={4} py={4}>
         <VStack spacing={6} align="stretch">
+          {accountStatus !== 'active' && (
+            <Alert
+              status={accountStatus === 'blocked' ? 'error' : 'warning'}
+              borderRadius="lg"
+            >
+              <AlertIcon />
+              <VStack align="flex-start" spacing={1}>
+                <Text fontWeight="semibold" color="gray.800">
+                  {accountStatus === 'blocked' ? 'Account blocked' : 'Account under review'}
+                </Text>
+                <Text fontSize="sm" color="gray.600">
+                  {accountStatusReason ||
+                    'Deposits are temporarily disabled. Please contact support for assistance.'}
+                </Text>
+              </VStack>
+            </Alert>
+          )}
+
           {/* Deposit Methods */}
           <Card bg={cardBg} borderRadius="xl" boxShadow="md">
             <CardBody>
@@ -306,7 +359,7 @@ export default function DepositPage() {
                   cursor="pointer"
                   onClick={() => {
                     setDepositMethod('check');
-                    onDepositOpen();
+                    handleOpenDepositModal();
                   }}
                 >
                   <CardBody p={4}>
@@ -342,7 +395,7 @@ export default function DepositPage() {
                   cursor="pointer"
                   onClick={() => {
                     setDepositMethod('transfer');
-                    onDepositOpen();
+                    handleOpenDepositModal();
                   }}
                 >
                   <CardBody p={4}>
@@ -378,7 +431,7 @@ export default function DepositPage() {
                   cursor="pointer"
                   onClick={() => {
                     setDepositMethod('cash');
-                    onDepositOpen();
+                    handleOpenDepositModal();
                   }}
                 >
                   <CardBody p={4}>
@@ -514,7 +567,7 @@ export default function DepositPage() {
             <Button
               colorScheme="purple"
               onClick={handleDeposit}
-              isDisabled={depositMethod === 'transfer'}
+              isDisabled={depositMethod === 'transfer' || accountStatus !== 'active'}
             >
               {depositMethod === 'transfer' ? 'Coming Soon' : 'Complete Deposit'}
             </Button>

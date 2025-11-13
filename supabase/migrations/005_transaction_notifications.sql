@@ -23,6 +23,19 @@ begin
         return NEW;
     end if;
 
+    -- Only notify for completed & approved transactions
+    if NEW.status <> 'completed' then
+        return NEW;
+    end if;
+
+    if coalesce(NEW.review_status, 'approved') <> 'approved' then
+        return NEW;
+    end if;
+
+    if TG_OP = 'UPDATE' and (OLD.status = NEW.status and coalesce(OLD.review_status, '') = coalesce(NEW.review_status, '')) then
+        return NEW;
+    end if;
+
     amount_text := to_char(abs_amount, 'FM$999,999,999.00');
     account_name := coalesce(NEW.recipient_name, 'your account');
 
@@ -63,6 +76,6 @@ $$;
 drop trigger if exists trigger_transaction_notifications on public.transactions;
 
 create trigger trigger_transaction_notifications
-after insert on public.transactions
+after insert or update on public.transactions
 for each row execute function public.log_transaction_notification();
 

@@ -31,6 +31,8 @@ import {
   Stack,
   Divider,
   Heading,
+  Alert,
+  AlertIcon,
 } from '@chakra-ui/react';
 import {
   Lock,
@@ -306,6 +308,19 @@ function WalletPage() {
   };
 
   const handleQuickAction = (action) => {
+    const status = profile?.account_status || 'active';
+    if (status !== 'active') {
+      toast({
+        title: status === 'blocked' ? 'Account blocked' : 'Account under review',
+        description:
+          profile?.account_status_reason ||
+          'This action is temporarily disabled. Please contact support for assistance.',
+        status: status === 'blocked' ? 'error' : 'warning',
+        duration: 4000,
+      });
+      return;
+    }
+
     switch (action) {
       case 'transfer':
         router.push('/send-money');
@@ -383,6 +398,24 @@ function WalletPage() {
 
   const primaryCard = cards.find(c => !c.is_frozen) || cards[0];
   const unreadCount = notifications.length + alerts.length;
+  const accountStatus = profile?.account_status || 'active';
+  const accountStatusReason = profile?.account_status_reason || '';
+  const canTransact = accountStatus === 'active';
+  const statusBanner =
+    accountStatus !== 'active' ? (
+      <Alert status={accountStatus === 'blocked' ? 'error' : 'warning'} borderRadius="lg" mb={4}>
+        <AlertIcon />
+        <VStack align="flex-start" spacing={0}>
+          <Text fontWeight="semibold" color="gray.800">
+            {accountStatus === 'blocked' ? 'Account blocked' : 'Account under review'}
+          </Text>
+          <Text fontSize="sm" color="gray.600">
+            {accountStatusReason ||
+              'Transfers and deposits are temporarily disabled. Please contact support for assistance.'}
+          </Text>
+        </VStack>
+      </Alert>
+    ) : null;
 
   const mobileLayout = (
     <Box minH="100vh" bg={bgColor} pb="80px">
@@ -443,6 +476,7 @@ function WalletPage() {
       </Box>
 
       <Box px={4} py={4}>
+        {statusBanner}
         {/* Account Overview */}
         <Card bg={cardBg} borderRadius="xl" mb={4} boxShadow="md">
           <CardBody>
@@ -564,6 +598,8 @@ function WalletPage() {
                   spacing={2}
                   cursor="pointer"
                   onClick={() => handleQuickAction(action)}
+                  opacity={canTransact ? 1 : 0.5}
+                  aria-disabled={!canTransact}
                 >
                   <Box
                     w="50px"
@@ -778,42 +814,67 @@ function WalletPage() {
             </Flex>
             <VStack spacing={3} align="stretch">
               {transactions.length > 0 ? (
-                transactions.map((transaction) => (
-                  <HStack key={transaction.id} justify="space-between" p={2} borderRadius="md" _hover={{ bg: 'gray.50' }}>
-                    <HStack spacing={3}>
-                      <Box
-                        w="40px"
-                        h="40px"
-                        borderRadius="full"
-                        bg={transaction.amount > 0 ? 'green.100' : 'red.100'}
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
+                transactions.map((transaction) => {
+                  const reviewStatus = transaction.review_status;
+                  let reviewBadgeLabel = '';
+                  let reviewBadgeColor = 'orange';
+
+                  if (reviewStatus === 'pending') {
+                    reviewBadgeLabel = 'Pending review';
+                    reviewBadgeColor = 'orange';
+                  } else if (reviewStatus === 'rejected') {
+                    reviewBadgeLabel = 'Rejected';
+                    reviewBadgeColor = 'red';
+                  } else if (reviewStatus === 'blocked') {
+                    reviewBadgeLabel = 'Blocked';
+                    reviewBadgeColor = 'red';
+                  }
+
+                  return (
+                    <HStack key={transaction.id} justify="space-between" p={2} borderRadius="md" _hover={{ bg: 'gray.50' }}>
+                      <HStack spacing={3}>
+                        <Box
+                          w="40px"
+                          h="40px"
+                          borderRadius="full"
+                          bg={transaction.amount > 0 ? 'green.100' : 'red.100'}
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                        >
+                          {transaction.amount > 0 ? (
+                            <ArrowDownRight size={20} color="var(--chakra-colors-green-500)" />
+                          ) : (
+                            <ArrowUpRight size={20} color="var(--chakra-colors-red-500)" />
+                          )}
+                        </Box>
+                        <VStack align="flex-start" spacing={0}>
+                          <Text fontSize="sm" fontWeight="semibold" color="gray.800">
+                            {transaction.recipient_name || transaction.description || 'Transaction'}
+                          </Text>
+                          <HStack spacing={2} align="center">
+                            <Text fontSize="xs" color="gray.500">
+                              {formatDate(transaction.created_at)} • {transaction.category}
+                            </Text>
+                            {reviewBadgeLabel && (
+                              <Badge colorScheme={reviewBadgeColor} fontSize="0.65rem">
+                                {reviewBadgeLabel}
+                              </Badge>
+                            )}
+                          </HStack>
+                        </VStack>
+                      </HStack>
+                      <Text
+                        fontSize="sm"
+                        fontWeight="semibold"
+                        color={transaction.amount > 0 ? 'green.500' : 'red.500'}
                       >
-                        {transaction.amount > 0 ? (
-                          <ArrowDownRight size={20} color="var(--chakra-colors-green-500)" />
-                        ) : (
-                          <ArrowUpRight size={20} color="var(--chakra-colors-red-500)" />
-                        )}
-                      </Box>
-                      <VStack align="flex-start" spacing={0}>
-                        <Text fontSize="sm" fontWeight="semibold" color="gray.800">
-                          {transaction.recipient_name || transaction.description || 'Transaction'}
-                        </Text>
-                        <Text fontSize="xs" color="gray.500">
-                          {formatDate(transaction.created_at)} • {transaction.category}
-                        </Text>
-                      </VStack>
+                        {transaction.amount > 0 ? '+' : ''}
+                        {formatCurrency(Math.abs(transaction.amount))}
+                      </Text>
                     </HStack>
-                    <Text
-                      fontSize="sm"
-                      fontWeight="semibold"
-                      color={transaction.amount > 0 ? 'green.500' : 'red.500'}
-                    >
-                      {transaction.amount > 0 ? '+' : ''}{formatCurrency(Math.abs(transaction.amount))}
-                    </Text>
-                  </HStack>
-                ))
+                  );
+                })
               ) : (
                 <Text fontSize="sm" color="gray.500" textAlign="center" py={4}>
                   No transactions yet
@@ -906,6 +967,7 @@ function WalletPage() {
             colorScheme="purple"
             variant="solid"
             onClick={() => router.push('/send-money')}
+            isDisabled={!canTransact}
           >
             New Transfer
           </Button>
@@ -938,6 +1000,12 @@ function WalletPage() {
           />
         </HStack>
       </Flex>
+
+      {statusBanner && (
+        <Box px={12} pt={6}>
+          {statusBanner}
+        </Box>
+      )}
 
       <Grid templateColumns="320px minmax(0, 1fr) 360px" gap={6} px={12} py={8} alignItems="start">
         <VStack spacing={6} align="stretch">
@@ -1044,6 +1112,7 @@ function WalletPage() {
                     colorScheme="whiteAlpha"
                     leftIcon={<Upload size={16} />}
                     onClick={() => handleQuickAction('deposit')}
+                    isDisabled={!canTransact}
                   >
                     Deposit funds
                   </Button>
@@ -1053,6 +1122,7 @@ function WalletPage() {
                     colorScheme="whiteAlpha"
                     leftIcon={<Send size={16} />}
                     onClick={() => handleQuickAction('transfer')}
+                    isDisabled={!canTransact}
                   >
                     Quick transfer
                   </Button>
@@ -1173,38 +1243,63 @@ function WalletPage() {
               </HStack>
               <VStack spacing={3} align="stretch">
                 {transactions.length > 0 ? (
-                  transactions.slice(0, 8).map((transaction) => (
-                    <HStack key={transaction.id} justify="space-between" p={3} borderRadius="md" bg="gray.50">
-                      <HStack spacing={3}>
-                        <Box
-                          w="42px"
-                          h="42px"
-                          borderRadius="full"
-                          bg={transaction.amount > 0 ? 'green.100' : 'red.100'}
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                        >
-                          {transaction.amount > 0 ? (
-                            <ArrowDownRight size={20} color="var(--chakra-colors-green-500)" />
-                          ) : (
-                            <ArrowUpRight size={20} color="var(--chakra-colors-red-500)" />
-                          )}
-                        </Box>
-                        <VStack align="flex-start" spacing={0}>
-                          <Text fontSize="sm" fontWeight="semibold" color="gray.800">
-                            {transaction.recipient_name || transaction.description || 'Transaction'}
-                          </Text>
-                          <Text fontSize="xs" color="gray.500">
-                            {formatDate(transaction.created_at)} • {transaction.category}
-                          </Text>
-                        </VStack>
+                  transactions.slice(0, 8).map((transaction) => {
+                    const reviewStatus = transaction.review_status;
+                    let badgeLabel = '';
+                    let badgeColor = 'orange';
+
+                    if (reviewStatus === 'pending') {
+                      badgeLabel = 'Pending review';
+                      badgeColor = 'orange';
+                    } else if (reviewStatus === 'rejected') {
+                      badgeLabel = 'Rejected';
+                      badgeColor = 'red';
+                    } else if (reviewStatus === 'blocked') {
+                      badgeLabel = 'Blocked';
+                      badgeColor = 'red';
+                    }
+
+                    return (
+                      <HStack key={transaction.id} justify="space-between" p={3} borderRadius="md" bg="gray.50">
+                        <HStack spacing={3}>
+                          <Box
+                            w="42px"
+                            h="42px"
+                            borderRadius="full"
+                            bg={transaction.amount > 0 ? 'green.100' : 'red.100'}
+                            display="flex"
+                            alignItems="center"
+                            justifyContent="center"
+                          >
+                            {transaction.amount > 0 ? (
+                              <ArrowDownRight size={20} color="var(--chakra-colors-green-500)" />
+                            ) : (
+                              <ArrowUpRight size={20} color="var(--chakra-colors-red-500)" />
+                            )}
+                          </Box>
+                          <VStack align="flex-start" spacing={0}>
+                            <Text fontSize="sm" fontWeight="semibold" color="gray.800">
+                              {transaction.recipient_name || transaction.description || 'Transaction'}
+                            </Text>
+                            <HStack spacing={2} align="center">
+                              <Text fontSize="xs" color="gray.500">
+                                {formatDate(transaction.created_at)} • {transaction.category}
+                              </Text>
+                              {badgeLabel && (
+                                <Badge colorScheme={badgeColor} fontSize="0.65rem">
+                                  {badgeLabel}
+                                </Badge>
+                              )}
+                            </HStack>
+                          </VStack>
+                        </HStack>
+                        <Text fontSize="sm" fontWeight="semibold" color={transaction.amount > 0 ? 'green.600' : 'red.500'}>
+                          {transaction.amount > 0 ? '+' : ''}
+                          {formatCurrency(Math.abs(transaction.amount))}
+                        </Text>
                       </HStack>
-                      <Text fontSize="sm" fontWeight="semibold" color={transaction.amount > 0 ? 'green.600' : 'red.500'}>
-                        {transaction.amount > 0 ? '+' : ''}{formatCurrency(Math.abs(transaction.amount))}
-                      </Text>
-                    </HStack>
-                  ))
+                    );
+                  })
                 ) : (
                   <Text fontSize="sm" color="gray.500">No transactions recorded yet.</Text>
                 )}

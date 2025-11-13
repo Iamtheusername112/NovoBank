@@ -99,6 +99,8 @@ function SendMoneyContent() {
   });
   const [notifications, setNotifications] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [accountStatus, setAccountStatus] = useState('active');
+  const [accountStatusReason, setAccountStatusReason] = useState('');
   
   const steps = [
     {
@@ -280,6 +282,14 @@ function SendMoneyContent() {
         .order('is_primary', { ascending: false })
         .order('created_at', { ascending: false });
       setAccounts(accountsData || []);
+
+      const { data: profileData } = await supabase
+        .from('user_profiles')
+        .select('account_status, account_status_reason')
+        .eq('id', user.id)
+        .single();
+      setAccountStatus(profileData?.account_status || 'active');
+      setAccountStatusReason(profileData?.account_status_reason || '');
 
       // Load saved recipients
       const { data: recipientsData } = await supabase
@@ -802,6 +812,18 @@ function SendMoneyContent() {
       return;
     }
 
+    if (accountStatus !== 'active') {
+      toast({
+        title: accountStatus === 'blocked' ? 'Account blocked' : 'Account under review',
+        description:
+          accountStatusReason ||
+          'Transfers are temporarily disabled for this account. Please contact support.',
+        status: accountStatus === 'blocked' ? 'error' : 'warning',
+        duration: 4000,
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -836,50 +858,33 @@ function SendMoneyContent() {
           ? transferNote.trim()
           : `${purposeLabel} to ${recipientContact.name}`;
 
-      const newBalance = currentBalance - totalDebit;
-      await supabase
-        .from('accounts')
-        .update({ balance: newBalance })
-        .eq('id', selectedAccount);
+      const transactionDescription =
+        fee > 0
+          ? `${description} (includes ${formatCurrency(fee)} ${deliveryOptions[deliverySpeed].label} fee)`
+          : description;
 
-      const transactionsPayload = [
-        {
-          user_id: user.id,
-          amount: -paymentAmount,
-          transaction_type: 'sent',
-          category: purposeLabel,
-          description,
-          recipient_name: recipientContact.name,
-          recipient_account: recipientContact.account,
-          status: 'completed',
-        },
-      ];
-
-      if (fee > 0) {
-        transactionsPayload.push({
-          user_id: user.id,
-          amount: -fee,
-          transaction_type: 'fee',
-          category: 'Transfer Fee',
-          description: `${deliveryOptions[deliverySpeed].label} surcharge`,
-          status: 'completed',
-        });
-      }
-
-      await supabase.from('transactions').insert(transactionsPayload);
-
-      const formattedAmount = formatCurrency(paymentAmount);
-      const formattedTotal = formatCurrency(totalDebit);
-      const formattedFee = formatCurrency(fee);
+      await supabase.from('transactions').insert({
+        user_id: user.id,
+        account_id: selectedAccount,
+        amount: -totalDebit,
+        transaction_type: 'sent',
+        category: purposeLabel,
+        description: transactionDescription,
+        recipient_name: recipientContact.name,
+        recipient_account: recipientContact.account,
+        status: 'pending',
+        review_status: 'pending',
+        requires_manual_review: true,
+      });
 
       toast({
-        title: 'Transfer scheduled for processing',
+        title: 'Transfer submitted',
         description:
           fee > 0
-            ? `${formattedTotal} debited (includes ${formattedFee} transfer fee).`
-            : `${formattedAmount} sent to ${recipientContact.name}.`,
-        status: 'success',
-        duration: 3500,
+            ? `${formattedTotal} pending approval (includes ${formattedFee} transfer fee).`
+            : `${formattedAmount} pending approval.`,
+        status: 'info',
+        duration: 4000,
       });
 
       setTimeout(() => {
@@ -905,6 +910,18 @@ function SendMoneyContent() {
         description: 'Please enter amount and select account',
         status: 'error',
         duration: 3000,
+      });
+      return;
+    }
+
+    if (accountStatus !== 'active') {
+      toast({
+        title: accountStatus === 'blocked' ? 'Account blocked' : 'Account under review',
+        description:
+          accountStatusReason ||
+          'Scheduled transfers are temporarily disabled. Please contact support.',
+        status: accountStatus === 'blocked' ? 'error' : 'warning',
+        duration: 4000,
       });
       return;
     }
@@ -1043,6 +1060,7 @@ function SendMoneyContent() {
   const deliveryDescription = deliveryOptions[deliverySpeed]?.description || '';
   const purposeLabel =
     purposeOptions.find((option) => option.value === transferPurpose)?.label || 'Transfer';
+  const canTransact = accountStatus === 'active';
 
   return (
     <Box
@@ -1083,6 +1101,25 @@ function SendMoneyContent() {
             />
           </HStack>
         </Flex>
+
+        {accountStatus !== 'active' && (
+          <Alert
+            status={accountStatus === 'blocked' ? 'error' : 'warning'}
+            borderRadius="lg"
+            mb={6}
+          >
+            <AlertIcon />
+            <VStack align="flex-start" spacing={0}>
+              <Text fontWeight="semibold" color="gray.800">
+                {accountStatus === 'blocked' ? 'Account blocked' : 'Account under review'}
+              </Text>
+              <Text fontSize="sm" color="gray.600">
+                {accountStatusReason ||
+                  'Transfers are temporarily disabled. Please contact support for assistance.'}
+              </Text>
+            </VStack>
+          </Alert>
+        )}
 
         <Box
           bg="white"
@@ -1673,7 +1710,10 @@ function SendMoneyContent() {
             <Button
               colorScheme="purple"
               onClick={handleNextStep}
-              isDisabled={currentStep === 2 && (accounts.length === 0 || !selectedAccount)}
+              isDisabled={
+                !canTransact ||
+                (currentStep === 2 && (accounts.length === 0 || !selectedAccount))
+              }
             >
               Continue
             </Button>
@@ -1682,6 +1722,7 @@ function SendMoneyContent() {
               colorScheme="purple"
               onClick={handleConfirmTransfer}
               isLoading={loading}
+              isDisabled={!canTransact}
               rightIcon={<ArrowRight size={18} />}
             >
               {isScheduled ? 'Schedule Transfer' : 'Confirm Transfer'}
@@ -1766,7 +1807,12 @@ function SendMoneyContent() {
             <Button variant="ghost" mr={3} onClick={onScheduleClose}>
               Cancel
             </Button>
-            <Button colorScheme="purple" onClick={handleSchedulePayment} isLoading={loading}>
+            <Button
+              colorScheme="purple"
+              onClick={handleSchedulePayment}
+              isLoading={loading}
+              isDisabled={!canTransact}
+            >
               Schedule Payment
             </Button>
           </ModalFooter>
