@@ -185,6 +185,9 @@ const AdminDashboardComponent = () => {
   const [contactResponseModal, setContactResponseModal] = useState({ isOpen: false, contact: null });
   const [contactResponseText, setContactResponseText] = useState('');
   const [contactActionLoading, setContactActionLoading] = useState({});
+  const [checkDepositModal, setCheckDepositModal] = useState({ isOpen: false, deposit: null });
+  const [checkDepositActionLoading, setCheckDepositActionLoading] = useState({});
+  const [checkDepositRejectionReason, setCheckDepositRejectionReason] = useState('');
 
   const authorizedFetch = useCallback(
     async (url, init = {}) => {
@@ -616,6 +619,81 @@ const AdminDashboardComponent = () => {
     [contactResponseModal, contactResponseText, authorizedFetch, fetchAdminData, handleCloseResponseModal, showInlineNotification]
   );
 
+  const handleCheckDepositAction = useCallback(
+    async (depositId, action) => {
+      setCheckDepositActionLoading((prev) => ({ ...prev, [depositId]: action }));
+
+      try {
+        const response = await authorizedFetch('/api/admin/check-deposits', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            deposit_id: depositId,
+            action: action,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Unable to process check deposit action.');
+        }
+
+        const result = await response.json();
+        showInlineNotification(
+          'success',
+          action === 'completed' ? 'Check deposit completed and account credited' : 'Check deposit updated',
+          ''
+        );
+        await fetchAdminData();
+      } catch (err) {
+        console.error('Check deposit action error:', err);
+        showInlineNotification('error', 'Action failed', err.message || 'Could not process check deposit.');
+      } finally {
+        setCheckDepositActionLoading((prev) => {
+          const next = { ...prev };
+          delete next[depositId];
+          return next;
+        });
+      }
+    },
+    [authorizedFetch, fetchAdminData, showInlineNotification]
+  );
+
+  const handleCheckDepositReject = useCallback(
+    async (depositId, reason) => {
+      const rejectionReason = reason || 'Rejected by administrator';
+      setCheckDepositActionLoading((prev) => ({ ...prev, [depositId]: 'reject' }));
+
+      try {
+        const response = await authorizedFetch('/api/admin/check-deposits', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            deposit_id: depositId,
+            action: 'reject',
+            rejection_reason: rejectionReason,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Unable to reject check deposit.');
+        }
+
+        showInlineNotification('success', 'Check deposit rejected', '');
+        await fetchAdminData();
+      } catch (err) {
+        console.error('Reject check deposit error:', err);
+        showInlineNotification('error', 'Action failed', err.message || 'Could not reject check deposit.');
+      } finally {
+        setCheckDepositActionLoading((prev) => {
+          const next = { ...prev };
+          delete next[depositId];
+          return next;
+        });
+      }
+    },
+    [authorizedFetch, fetchAdminData, showInlineNotification]
+  );
+
   const loadUserAccounts = useCallback(
     async (userId) => {
       if (!userId) {
@@ -1006,6 +1084,7 @@ const AdminDashboardComponent = () => {
             <Tab>Customers</Tab>
             <Tab>Transactions</Tab>
             <Tab>Operations</Tab>
+            <Tab>Check Deposits</Tab>
           </TabList>
           <TabPanels>
             <TabPanel px={0} pt={6}>
@@ -1760,6 +1839,152 @@ const AdminDashboardComponent = () => {
                 )}
               </Stack>
             </TabPanel>
+            <TabPanel px={0} pt={6}>
+              <Stack spacing={4}>
+                <Flex
+                  direction={{ base: 'column', md: 'row' }}
+                  justify="space-between"
+                  align={{ base: 'stretch', md: 'center' }}
+                  gap={4}
+                >
+                  <Text fontSize="lg" fontWeight="semibold" color="gray.800">
+                    Check Deposits ({data?.checkDeposits?.length || 0})
+                  </Text>
+                  <HStack spacing={2}>
+                    <Badge colorScheme="orange" fontSize="sm">
+                      {data?.checkDeposits?.filter((d) => d.status === 'pending').length || 0} Pending
+                    </Badge>
+                    <Badge colorScheme="blue" fontSize="sm">
+                      {data?.checkDeposits?.filter((d) => d.status === 'processing').length || 0} Processing
+                    </Badge>
+                  </HStack>
+                </Flex>
+
+                {data?.checkDeposits && data.checkDeposits.length > 0 ? (
+                  <VStack align="stretch" spacing={4}>
+                    {data.checkDeposits.map((deposit) => {
+                      const loadingAction = checkDepositActionLoading[deposit.id];
+                      const statusColor = {
+                        pending: 'orange',
+                        processing: 'blue',
+                        completed: 'green',
+                        rejected: 'red',
+                        cancelled: 'gray',
+                      }[deposit.status] || 'gray';
+
+                      return (
+                        <Card key={deposit.id} bg="white" borderRadius="xl" boxShadow="sm">
+                          <CardBody>
+                            <Flex
+                              direction={{ base: 'column', md: 'row' }}
+                              gap={4}
+                              align={{ base: 'flex-start', md: 'center' }}
+                            >
+                              <VStack align="flex-start" spacing={2} flex={1}>
+                                <HStack spacing={2}>
+                                  <Text fontWeight="semibold" color="gray.800">
+                                    {deposit.customer}
+                                  </Text>
+                                  <Badge colorScheme={statusColor} variant="subtle">
+                                    {deposit.status}
+                                  </Badge>
+                                </HStack>
+                                <Text fontSize="sm" color="gray.500">
+                                  {deposit.customer_email}
+                                </Text>
+                                <HStack spacing={4} fontSize="sm" color="gray.600" flexWrap="wrap">
+                                  <Text>
+                                    <strong>Amount:</strong> {formatCurrency(deposit.amount)}
+                                  </Text>
+                                  {deposit.check_number && (
+                                    <Text>
+                                      <strong>Check #:</strong> {deposit.check_number}
+                                    </Text>
+                                  )}
+                                  <Text>
+                                    <strong>Deposit Date:</strong> {formatDate(deposit.deposit_date)}
+                                  </Text>
+                                </HStack>
+                                {deposit.rejection_reason && (
+                                  <Alert status="error" borderRadius="md" fontSize="sm">
+                                    <AlertIcon />
+                                    {deposit.rejection_reason}
+                                  </Alert>
+                                )}
+                                <Text fontSize="xs" color="gray.400">
+                                  Submitted {formatDate(deposit.created_at)}
+                                </Text>
+                              </VStack>
+
+                              <VStack spacing={2} align="flex-end">
+                                {(deposit.front_image_url || deposit.back_image_url) && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setCheckDepositModal({ isOpen: true, deposit })}
+                                  >
+                                    View Images
+                                  </Button>
+                                )}
+                                <HStack spacing={2}>
+                                  {deposit.status === 'pending' && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        colorScheme="green"
+                                        isLoading={loadingAction === 'approve'}
+                                        isDisabled={Boolean(loadingAction)}
+                                        onClick={() => handleCheckDepositAction(deposit.id, 'approve')}
+                                      >
+                                        Approve
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        colorScheme="red"
+                                        variant="outline"
+                                        isLoading={loadingAction === 'reject'}
+                                        isDisabled={Boolean(loadingAction)}
+                                        onClick={() => {
+                                          const reason = prompt('Enter rejection reason (optional):');
+                                          if (reason !== null) {
+                                            handleCheckDepositReject(deposit.id, reason);
+                                          }
+                                        }}
+                                      >
+                                        Reject
+                                      </Button>
+                                    </>
+                                  )}
+                                  {deposit.status === 'processing' && (
+                                    <Button
+                                      size="sm"
+                                      colorScheme="green"
+                                      isLoading={loadingAction === 'completed'}
+                                      isDisabled={Boolean(loadingAction)}
+                                      onClick={() => handleCheckDepositAction(deposit.id, 'completed')}
+                                    >
+                                      Complete & Credit Account
+                                    </Button>
+                                  )}
+                                </HStack>
+                              </VStack>
+                            </Flex>
+                          </CardBody>
+                        </Card>
+                      );
+                    })}
+                  </VStack>
+                ) : (
+                  <Card bg="white" borderRadius="xl" boxShadow="sm">
+                    <CardBody>
+                      <Text textAlign="center" color="gray.500">
+                        No check deposits found.
+                      </Text>
+                    </CardBody>
+                  </Card>
+                )}
+              </Stack>
+            </TabPanel>
           </TabPanels>
         </Tabs>
       </Box>
@@ -2154,6 +2379,57 @@ const AdminDashboardComponent = () => {
                 Submit Response
               </Button>
             )}
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Check Deposit Images Modal */}
+      <Modal
+        isOpen={checkDepositModal.isOpen}
+        onClose={() => setCheckDepositModal({ isOpen: false, deposit: null })}
+        size="xl"
+      >
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Check Deposit Images</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            {checkDepositModal.deposit && (
+              <VStack spacing={4}>
+                {checkDepositModal.deposit.front_image_url && (
+                  <Box>
+                    <Text fontWeight="semibold" mb={2}>
+                      Front of Check
+                    </Text>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={checkDepositModal.deposit.front_image_url}
+                      alt="Front of check"
+                      style={{ borderRadius: '8px', maxHeight: '400px', objectFit: 'contain', width: '100%' }}
+                    />
+                  </Box>
+                )}
+                {checkDepositModal.deposit.back_image_url && (
+                  <Box>
+                    <Text fontWeight="semibold" mb={2}>
+                      Back of Check
+                    </Text>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={checkDepositModal.deposit.back_image_url}
+                      alt="Back of check"
+                      style={{ borderRadius: '8px', maxHeight: '400px', objectFit: 'contain', width: '100%' }}
+                    />
+                  </Box>
+                )}
+                {!checkDepositModal.deposit.front_image_url && !checkDepositModal.deposit.back_image_url && (
+                  <Text color="gray.500">No images available for this deposit.</Text>
+                )}
+              </VStack>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button onClick={() => setCheckDepositModal({ isOpen: false, deposit: null })}>Close</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

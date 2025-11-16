@@ -93,6 +93,7 @@ export async function GET(request) {
       blockedAccountsResult,
       contactSubmissionsResult,
       adminNotificationsResult,
+      checkDepositsResult,
     ] = await Promise.all([
       supabaseAdmin
         .from('user_profiles')
@@ -126,6 +127,10 @@ export async function GET(request) {
         .from('admin_notifications')
         .select('id, notification_type, reference_id, title, message, is_read, created_at')
         .order('created_at', { ascending: false }),
+      supabaseAdmin
+        .from('check_deposits')
+        .select('id, user_id, account_id, check_number, amount, front_image_url, back_image_url, status, deposit_date, available_date, rejection_reason, created_at, updated_at')
+        .order('created_at', { ascending: false }),
     ]);
 
     // Handle potential errors
@@ -137,6 +142,7 @@ export async function GET(request) {
     if (blockedAccountsResult.error) throw blockedAccountsResult.error;
     if (contactSubmissionsResult.error) throw contactSubmissionsResult.error;
     if (adminNotificationsResult.error) throw adminNotificationsResult.error;
+    if (checkDepositsResult.error) throw checkDepositsResult.error;
 
     const accountsStats = accountsStatsResult.data || [];
     const usersData = [...(usersResult.data || [])];
@@ -146,6 +152,7 @@ export async function GET(request) {
     const blockedAccounts = blockedAccountsResult.data || [];
     const contactSubmissions = contactSubmissionsResult.data || [];
     const adminNotifications = adminNotificationsResult.data || [];
+    const checkDeposits = checkDepositsResult.data || [];
 
     const accountAggregation = accountsStats.reduce((acc, account) => {
       const userId = account.user_id;
@@ -246,6 +253,16 @@ export async function GET(request) {
       };
     });
 
+    const mappedCheckDeposits = checkDeposits.map((deposit) => {
+      const owner = profileMap[deposit.user_id];
+      return {
+        ...deposit,
+        amount: parseFloat(deposit.amount || 0),
+        customer: owner ? owner.fullName : 'Unknown',
+        customer_email: owner ? owner.email : undefined,
+      };
+    });
+
     const unreadContacts = contactSubmissions.filter((cs) => cs.status === 'unread').length;
     const unreadNotifications = adminNotifications.filter((n) => !n.is_read).length;
 
@@ -272,6 +289,7 @@ export async function GET(request) {
       blockedAccounts,
       contactSubmissions,
       adminNotifications,
+      checkDeposits: mappedCheckDeposits,
     });
   } catch (error) {
     console.error('Admin overview error:', error);
