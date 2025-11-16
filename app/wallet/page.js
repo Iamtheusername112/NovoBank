@@ -21,6 +21,7 @@ import {
   ModalContent,
   ModalHeader,
   ModalBody,
+  ModalFooter,
   ModalCloseButton,
   useDisclosure,
   Progress,
@@ -42,6 +43,7 @@ import {
   ArrowLeft,
   ArrowUpRight,
   ArrowDownRight,
+  ArrowLeftRight,
   Settings,
   Upload,
   Camera,
@@ -59,6 +61,7 @@ import {
   PiggyBank,
   BarChart3,
   MessageCircle,
+  Target,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
@@ -97,6 +100,9 @@ function WalletPage() {
   const [spendingData, setSpendingData] = useState([]);
   const [monthlySpending, setMonthlySpending] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [contactResponses, setContactResponses] = useState([]);
+  const [selectedResponse, setSelectedResponse] = useState(null);
+  const { isOpen: isResponseModalOpen, onOpen: onResponseModalOpen, onClose: onResponseModalClose } = useDisclosure();
 
   useEffect(() => {
     setMounted(true);
@@ -238,6 +244,87 @@ function WalletPage() {
     }
   };
 
+  const loadContactResponses = async (user) => {
+    try {
+      // Try API route first
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.log('No session found for loading contact responses');
+        return;
+      }
+
+      const response = await fetch('/api/user/contact-responses', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          console.log('Loaded contact responses from API:', result.data.length);
+          setContactResponses(result.data || []);
+          return;
+        }
+      } else {
+        console.log('API route failed, trying direct Supabase query');
+      }
+
+      // Fallback: Query directly from Supabase
+      // Try by user_id first
+      let allResponses = [];
+      
+      if (user.id) {
+        const { data: byUserId, error: error1 } = await supabase
+          .from('contact_submissions')
+          .select('id, name, email, message, admin_response, responded_at, created_at, status')
+          .eq('user_id', user.id)
+          .not('admin_response', 'is', null)
+          .order('responded_at', { ascending: false });
+
+        if (!error1 && byUserId) {
+          allResponses = byUserId;
+          console.log('Loaded contact responses by user_id:', byUserId.length);
+        }
+      }
+
+      // Also try by email
+      if (user.email) {
+        const { data: byEmail, error: error2 } = await supabase
+          .from('contact_submissions')
+          .select('id, name, email, message, admin_response, responded_at, created_at, status')
+          .eq('email', user.email.toLowerCase())
+          .not('admin_response', 'is', null)
+          .order('responded_at', { ascending: false });
+
+        if (!error2 && byEmail) {
+          // Merge results, avoiding duplicates
+          const existingIds = new Set(allResponses.map(c => c.id));
+          const newSubmissions = byEmail.filter(c => !existingIds.has(c.id));
+          allResponses = [...allResponses, ...newSubmissions];
+          console.log('Loaded contact responses by email:', byEmail.length);
+        }
+      }
+
+      // Sort by responded_at descending
+      allResponses.sort((a, b) => {
+        const dateA = new Date(a.responded_at || a.created_at);
+        const dateB = new Date(b.responded_at || b.created_at);
+        return dateB - dateA;
+      });
+
+      setContactResponses(allResponses);
+      console.log('Total contact responses loaded:', allResponses.length);
+    } catch (error) {
+      console.error('Error loading contact responses:', error);
+    }
+  };
+
+  const handleViewResponse = (response) => {
+    setSelectedResponse(response);
+    onResponseModalOpen();
+  };
+
   const handleProfileImageUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -356,6 +443,22 @@ function WalletPage() {
         break;
       case 'bills':
         router.push('/bills');
+        break;
+      case 'bill-pay':
+        router.push('/bill-pay');
+        break;
+      case 'check-deposit':
+        router.push('/check-deposit');
+        break;
+      case 'transfers':
+        router.push('/transfers');
+        break;
+      case 'savings-goals':
+        router.push('/savings-goals');
+        break;
+      case 'more':
+        // Could open a modal with more options or navigate to a menu
+        router.push('/accounts');
         break;
       default:
         break;
@@ -576,12 +679,16 @@ function WalletPage() {
                 View Scheduled
               </Button>
             </HStack>
-            <HStack spacing={3} justify="space-around">
+            <SimpleGrid columns={4} spacing={3}>
               {[
                 { icon: Send, label: 'Transfer', action: 'transfer', color: 'purple' },
-                { icon: Receipt, label: 'Pay Bills', action: 'bills', color: 'blue' },
+                { icon: Receipt, label: 'Pay Bills', action: 'bill-pay', color: 'blue' },
                 { icon: Upload, label: 'Deposit', action: 'deposit', color: 'green' },
-                { icon: Shield, label: primaryCard?.is_frozen ? 'Unfreeze' : 'Freeze', action: 'freeze', color: 'orange' },
+                { icon: Camera, label: 'Check', action: 'check-deposit', color: 'teal' },
+                { icon: ArrowLeftRight, label: 'Move', action: 'transfers', color: 'orange' },
+                { icon: Target, label: 'Goals', action: 'savings-goals', color: 'pink' },
+                { icon: Shield, label: primaryCard?.is_frozen ? 'Unfreeze' : 'Freeze', action: 'freeze', color: 'red' },
+                { icon: BarChart3, label: 'More', action: 'more', color: 'gray' },
               ].map(({ icon: Icon, label, action, color }) => (
                 <VStack
                   key={action}
@@ -607,7 +714,7 @@ function WalletPage() {
                   </Text>
                 </VStack>
               ))}
-            </HStack>
+            </SimpleGrid>
           </CardBody>
         </Card>
 
@@ -752,6 +859,62 @@ function WalletPage() {
                     </Text>
                     <Text fontSize="xs" color="gray.600">
                       {alert.message}
+                    </Text>
+                  </Box>
+                ))}
+              </VStack>
+            </CardBody>
+          </Card>
+        )}
+
+        {/* Admin Responses */}
+        {contactResponses.length > 0 && (
+          <Card bg={cardBg} borderRadius="xl" mb={4} boxShadow="md" borderLeft="4px" borderColor="blue.500">
+            <CardBody>
+              <HStack spacing={2} mb={3} justify="space-between">
+                <HStack spacing={2}>
+                  <MessageCircle size={20} color="var(--chakra-colors-blue-500)" />
+                  <Text fontSize="lg" fontWeight="semibold" color="gray.800">
+                    Support Responses
+                  </Text>
+                  <Badge colorScheme="blue" borderRadius="full">
+                    {contactResponses.length}
+                  </Badge>
+                </HStack>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => router.push('/notifications')}
+                >
+                  View All
+                </Button>
+              </HStack>
+              <VStack spacing={2} align="stretch">
+                {contactResponses.slice(0, 3).map((response) => (
+                  <Box
+                    key={response.id}
+                    p={3}
+                    bg="blue.50"
+                    borderRadius="md"
+                    cursor="pointer"
+                    onClick={() => handleViewResponse(response)}
+                    _hover={{ bg: 'blue.100' }}
+                    borderLeft="3px"
+                    borderColor="blue.500"
+                  >
+                    <HStack spacing={2} mb={1}>
+                      <Text fontSize="sm" fontWeight="semibold" color="gray.800">
+                        Response from Support
+                      </Text>
+                      <Badge colorScheme="green" size="sm">
+                        New
+                      </Badge>
+                    </HStack>
+                    <Text fontSize="xs" color="gray.600" noOfLines={2}>
+                      {response.admin_response}
+                    </Text>
+                    <Text fontSize="xs" color="gray.500" mt={1}>
+                      {response.responded_at ? formatDate(response.responded_at) : ''}
                     </Text>
                   </Box>
                 ))}
@@ -1148,7 +1311,7 @@ function WalletPage() {
                   <VStack align="flex-start" spacing={2} mt={8}>
                     <Text fontSize="sm" opacity={0.8}>Available balance</Text>
                     <Heading size="md">{formatCurrency(primaryCard.balance)}</Heading>
-                    <Text fontSize="sm">{primaryCard.card_holder_name} •••• {primaryCard.card_number.slice(-4)}</Text>
+                    <Text fontSize="sm">{primaryCard.card_holder_name || `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'Cardholder'} •••• {primaryCard.card_number.slice(-4)}</Text>
                     <Text fontSize="xs" opacity={0.7}>Expires {primaryCard.expiry_date}</Text>
                   </VStack>
                 </Box>
@@ -1346,6 +1509,49 @@ function WalletPage() {
       {isDesktop ? desktopLayout : mobileLayout}
       {modals}
       <ContactUsModal isOpen={isContactOpen} onClose={onContactClose} />
+      
+      {/* Admin Response Modal */}
+      <Modal isOpen={isResponseModalOpen} onClose={onResponseModalClose} size="lg" isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Support Response</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            {selectedResponse && (
+              <VStack spacing={4} align="stretch">
+                <Box>
+                  <Text fontSize="sm" color="gray.500" mb={1}>
+                    Your Message
+                  </Text>
+                  <Text fontSize="sm" color="gray.800" p={3} bg="gray.50" borderRadius="md">
+                    {selectedResponse.message}
+                  </Text>
+                </Box>
+                <Divider />
+                <Box>
+                  <HStack spacing={2} mb={2}>
+                    <Text fontSize="sm" fontWeight="semibold" color="gray.700">
+                      Admin Response
+                    </Text>
+                    <Badge colorScheme="green">Responded</Badge>
+                  </HStack>
+                  <Text fontSize="sm" color="gray.800" p={3} bg="blue.50" borderRadius="md" borderLeft="4px" borderColor="blue.500">
+                    {selectedResponse.admin_response}
+                  </Text>
+                  {selectedResponse.responded_at && (
+                    <Text fontSize="xs" color="gray.500" mt={2}>
+                      Responded on {new Date(selectedResponse.responded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </Text>
+                  )}
+                </Box>
+              </VStack>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button onClick={onResponseModalClose}>Close</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </>
   );
 }

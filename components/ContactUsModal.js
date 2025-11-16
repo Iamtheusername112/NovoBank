@@ -64,6 +64,9 @@ export default function ContactUsModal({ isOpen, onClose }) {
 
     setLoading(true);
     try {
+      // Get current user if authenticated
+      const { data: { user } } = await supabase.auth.getUser();
+      
       const { error } = await supabase
         .from('contact_submissions')
         .insert([
@@ -72,6 +75,7 @@ export default function ContactUsModal({ isOpen, onClose }) {
             email: formData.email.trim().toLowerCase(),
             message: formData.message.trim(),
             status: 'unread',
+            user_id: user?.id || null, // Include user_id if authenticated
           },
         ]);
 

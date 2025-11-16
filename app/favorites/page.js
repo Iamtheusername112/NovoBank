@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Box, Text, VStack, Button, HStack, useDisclosure, IconButton, Flex } from '@chakra-ui/react';
+import { useRouter } from 'next/navigation';
 import { MessageCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import StatusBar from '@/components/StatusBar';
@@ -9,13 +10,23 @@ import BottomNavigation from '@/components/BottomNavigation';
 import ContactUsModal from '@/components/ContactUsModal';
 
 export default function FavoritesPage() {
+  const [mounted, setMounted] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [unreadAlertCount, setUnreadAlertCount] = useState(0);
   const { isOpen: isContactOpen, onOpen: onContactOpen, onClose: onContactClose } = useDisclosure();
+  const router = useRouter();
 
   useEffect(() => {
-    loadNotificationCounts();
-  }, []);
+    setMounted(true);
+    // Redirect to invest page since favorites has been replaced
+    router.replace('/invest');
+  }, [router]);
+
+  useEffect(() => {
+    if (mounted) {
+      loadNotificationCounts();
+    }
+  }, [mounted]);
 
   const loadNotificationCounts = async () => {
     try {
@@ -39,6 +50,10 @@ export default function FavoritesPage() {
       console.error('Error loading notification counts:', error);
     }
   };
+
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <Box minH="100vh" bg="gray.50" pb="80px">

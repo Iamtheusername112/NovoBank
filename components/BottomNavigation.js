@@ -1,7 +1,7 @@
 'use client';
 
 import { Box, Flex, IconButton, Text } from '@chakra-ui/react';
-import { Wallet, Star, BarChart3, User, Building2 } from 'lucide-react';
+import { Wallet, TrendingUp, BarChart3, User, Building2 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 
 export default function BottomNavigation() {
@@ -11,7 +11,7 @@ export default function BottomNavigation() {
   const navItems = [
     { icon: Wallet, label: 'Wallet', path: '/wallet' },
     { icon: Building2, label: 'Accounts', path: '/accounts' },
-    { icon: Star, label: 'Favorites', path: '/favorites' },
+    { icon: TrendingUp, label: 'Invest', path: '/invest' },
     { icon: BarChart3, label: 'Statistic', path: '/statistics' },
     { icon: User, label: 'Profile', path: '/profile' },
   ];

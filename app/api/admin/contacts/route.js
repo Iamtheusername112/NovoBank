@@ -81,6 +81,15 @@ export async function PATCH(request) {
       }
     }
 
+    // First, get the contact submission to check if user_id exists
+    const { data: existingContact, error: fetchError } = await supabaseAdmin
+      .from('contact_submissions')
+      .select('user_id, email')
+      .eq('id', contact_id)
+      .single();
+
+    if (fetchError) throw fetchError;
+
     const { data, error } = await supabaseAdmin
       .from('contact_submissions')
       .update(updateData)
@@ -97,6 +106,26 @@ export async function PATCH(request) {
         .update({ is_read: true })
         .eq('notification_type', 'contact_submission')
         .eq('reference_id', contact_id);
+    }
+
+    // If admin_response was added, create a notification for the user
+    // The database trigger will handle this, but we can also do it here as a backup
+    if (admin_response && admin_response.trim() && data.user_id) {
+      // Try to create notification (trigger should handle it, but this is a backup)
+      try {
+        await supabaseAdmin
+          .from('notifications')
+          .insert({
+            user_id: data.user_id,
+            title: 'Response to Your Contact Form',
+            message: `You have received a response from our support team regarding your contact submission.`,
+            type: 'info',
+            is_read: false,
+          });
+      } catch (notifError) {
+        // If notification creation fails, log but don't fail the request
+        console.error('Failed to create user notification:', notifError);
+      }
     }
 
     return NextResponse.json({ success: true, data });

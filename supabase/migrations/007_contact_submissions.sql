@@ -1,6 +1,7 @@
 -- Contact Submissions Table
 CREATE TABLE IF NOT EXISTS public.contact_submissions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
     email TEXT NOT NULL,
     message TEXT NOT NULL,
@@ -41,11 +42,21 @@ CREATE POLICY "Anyone can submit contact form"
     ON public.contact_submissions FOR INSERT
     WITH CHECK (true);
 
--- Only admins can view contact submissions (checked via service role in API)
-DROP POLICY IF EXISTS "Admins can view contact submissions" ON public.contact_submissions;
-CREATE POLICY "Admins can view contact submissions"
+-- Allow users to view their own contact submissions
+DROP POLICY IF EXISTS "Users can view their own contact submissions" ON public.contact_submissions;
+CREATE POLICY "Users can view their own contact submissions"
     ON public.contact_submissions FOR SELECT
-    USING (true); -- Admin check is done in API route
+    USING (
+        user_id IS NOT NULL AND auth.uid() = user_id
+        OR
+        (user_id IS NULL AND EXISTS (
+            SELECT 1 FROM public.user_profiles 
+            WHERE id = auth.uid() AND email = LOWER(contact_submissions.email)
+        ))
+    );
+
+-- Admins can view all contact submissions (checked via service role in API)
+-- Note: This policy allows admins to view via service role, but regular users use the policy above
 
 -- Only admins can update contact submissions (checked via service role in API)
 DROP POLICY IF EXISTS "Admins can update contact submissions" ON public.contact_submissions;

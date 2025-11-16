@@ -161,7 +161,6 @@ const AdminDashboardComponent = () => {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [authError, setAuthError] = useState('');
-
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -834,8 +833,8 @@ const AdminDashboardComponent = () => {
     setFetchingAccounts(false);
   };
 
-  // Prevent hydration mismatch - check mounted before rendering Chakra UI components
-  if (!mounted) {
+  // Prevent hydration mismatch - check mounted and ensure we're on client before rendering Chakra UI components
+  if (typeof window === 'undefined' || !mounted) {
     return null;
   }
 
@@ -2176,10 +2175,26 @@ const AdminDashboardComponent = () => {
   );
 };
 
+// Prevent SSR to avoid hydration issues
 const AdminDashboard = dynamic(() => Promise.resolve(AdminDashboardComponent), {
   ssr: false,
   loading: () => null,
 });
 
-export default AdminDashboard;
+// Client component wrapper to prevent SSR
+function AdminPage() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return null;
+  }
+
+  return <AdminDashboard />;
+}
+
+export default AdminPage;
 

@@ -140,6 +140,7 @@ function AccountsPageComponent() {
   
   const [accounts, setAccounts] = useState([]);
   const [cards, setCards] = useState([]);
+  const [profile, setProfile] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -206,6 +207,14 @@ function AccountsPageComponent() {
         .order('is_primary', { ascending: false })
         .order('created_at', { ascending: false });
       setAccounts(accountsData || []);
+
+      // Load profile
+      const { data: profileData } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      setProfile(profileData);
 
       // Load cards
       const { data: cardsData } = await supabase
@@ -789,7 +798,7 @@ function AccountsPageComponent() {
                       <CreditCard size={24} color="#6b7280" />
                       <VStack align="flex-start" spacing={0} flex={1}>
                         <Text fontSize="md" fontWeight="semibold" color="gray.800">
-                          {card.card_holder_name}
+                          {card.card_holder_name || `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'Cardholder'}
                         </Text>
                         <Text fontSize="xs" color="gray.600">
                           •••• {card.card_number.slice(-4)} • Expires {card.expiry_date}
